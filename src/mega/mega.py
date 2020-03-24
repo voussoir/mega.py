@@ -17,6 +17,7 @@ import shutil
 import requests
 from tenacity import retry, wait_exponential, retry_if_exception_type
 
+from . import errors
 from .errors import ValidationError, RequestError, error_for_code
 from .crypto import (
     a32_to_base64, encrypt_key, base64_url_encode, encrypt_attr, base64_to_a32,
@@ -43,7 +44,7 @@ class Mega:
         self.options = options
 
     @retry(
-        retry=retry_if_exception_type(RuntimeError),
+        retry=retry_if_exception_type(errors.EAGAIN),
         wait=wait_exponential(multiplier=2, min=2, max=60)
     )
     def _api_request(self, data, params={}):
@@ -67,11 +68,10 @@ class Mega:
             timeout=self.timeout,
         )
         json_resp = json.loads(req.text)
+        if isinstance(json_resp, list) and isinstance(json_resp[0], int):
+            json_resp = json_resp[0]
         if isinstance(json_resp, int):
-            if json_resp == -3:
-                msg = 'Request failed, retrying'
-                logger.info(msg)
-                raise RuntimeError(msg)
+            # If this raises EAGAIN it'll be caught by tenacity retry.
             raise error_for_code(json_resp)
         return json_resp[0]
 

@@ -23,7 +23,7 @@ from .crypto import (
     a32_to_base64, encrypt_key, base64_url_encode, encrypt_attr, base64_to_a32,
     base64_url_decode, decrypt_attr, a32_to_str, get_chunks, str_to_a32,
     decrypt_key, mpi_to_int, stringhash, prepare_key, make_id, makebyte,
-    modular_inverse
+    modular_inverse, interleave_xor_8
 )
 
 logger = logging.getLogger(__name__)
@@ -274,10 +274,7 @@ class Mega:
                 file['shared_folder_key'] = shared_key
             if key is not None:
                 if file['t'] == NODE_TYPE_FILE:
-                    k = (
-                        key[0] ^ key[4], key[1] ^ key[5], key[2] ^ key[6],
-                        key[3] ^ key[7]
-                    )
+                    k = interleave_xor_8(key)
                     file['iv'] = key[4:6] + (0, 0)
                     file['meta_mac'] = key[6:8]
                 else:
@@ -736,10 +733,7 @@ class Mega:
                 }
             file_data = self._api_request(request)
 
-            k = (
-                file_key[0] ^ file_key[4], file_key[1] ^ file_key[5],
-                file_key[2] ^ file_key[6], file_key[3] ^ file_key[7]
-            )
+            k = interleave_xor_8(file_key)
             iv = file_key[4:6] + (0, 0)
             meta_mac = file_key[6:8]
         else:
@@ -1190,9 +1184,7 @@ class Mega:
             raise ValueError("Unexpected result", data)
 
         key = base64_to_a32(file_key)
-        k = (
-            key[0] ^ key[4], key[1] ^ key[5], key[2] ^ key[6], key[3] ^ key[7]
-        )
+        k = interleave_xor_8(key)
 
         size = data['s']
         unencrypted_attrs = decrypt_attr(base64_url_decode(data['at']), k)
@@ -1217,9 +1209,7 @@ class Mega:
             dest_name = pl_info['name']
 
         key = base64_to_a32(file_key)
-        k = (
-            key[0] ^ key[4], key[1] ^ key[5], key[2] ^ key[6], key[3] ^ key[7]
-        )
+        k = interleave_xor_8(key)
 
         encrypted_key = a32_to_base64(encrypt_key(key, self.master_key))
         encrypted_name = base64_url_encode(encrypt_attr({'n': dest_name}, k))

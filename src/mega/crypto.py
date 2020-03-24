@@ -48,8 +48,8 @@ def stringhash(str, aeskey):
     """
     s32 = str_to_a32(str)
     h32 = [0, 0, 0, 0]
-    for i in range(len(s32)):
-        h32[i % 4] ^= s32[i]
+    for (index, word) in enumerate(s32):
+        h32[index % 4] ^= word
     for r in range(0x4000):
         h32 = aes_cbc_encrypt_a32(h32, aeskey)
     return a32_to_base64((h32[0], h32[2]))
@@ -68,15 +68,20 @@ def prepare_key(arr):
 
 
 def encrypt_key(a, key):
-    return sum(
-        (aes_cbc_encrypt_a32(a[i:i + 4], key) for i in range(0, len(a), 4)), ()
+    encrypted = tuple(
+        piece
+        for i in range(0, len(a), 4)
+        for piece in aes_cbc_encrypt_a32(a[i:i + 4], key)
     )
-
+    return encrypted
 
 def decrypt_key(a, key):
-    return sum(
-        (aes_cbc_decrypt_a32(a[i:i + 4], key) for i in range(0, len(a), 4)), ()
+    decrypted = tuple(
+        piece
+        for i in range(0, len(a), 4)
+        for piece in aes_cbc_decrypt_a32(a[i:i + 4], key)
     )
+    return decrypted
 
 
 def encrypt_attr(attr, key):
@@ -160,19 +165,18 @@ def get_chunks(size):
     Given the size of a file in bytes, return tuples (chunk_start, chunk_size)
     for the purposes of downloading or uploading a file in chunks.
     """
-    p = 0
-    s = 0x20000
-    while p + s < size:
-        yield (p, s)
-        p += s
-        if s < 0x100000:
-            s += 0x20000
-    yield (p, size - p)
+    chunk_start = 0
+    chunk_size = 0x20000
+    while chunk_start + chunk_size < size:
+        yield (chunk_start, chunk_size)
+        chunk_start += chunk_size
+        # why?
+        if chunk_size < 0x100000:
+            chunk_size += 0x20000
+    yield (chunk_start, size - chunk_start)
 
 
 def make_id(length):
-    text = ''
     possible = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789"
-    for i in range(length):
-        text += random.choice(possible)
+    text = ''.join(random.choice(possible) for i in range(length))
     return text

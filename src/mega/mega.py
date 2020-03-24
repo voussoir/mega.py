@@ -17,8 +17,8 @@ import shutil
 import requests
 from tenacity import retry, wait_exponential, retry_if_exception_type
 
+from . import crypto
 from . import errors
-from .errors import ValidationError, RequestError, error_for_code
 from .crypto import (
     a32_to_base64, encrypt_key, base64_url_encode, encrypt_attr, base64_to_a32,
     base64_url_decode, decrypt_attr, a32_to_str, get_chunks, str_to_a32,
@@ -78,7 +78,7 @@ class Mega:
             json_resp = json_resp[0]
         if isinstance(json_resp, int):
             # If this raises EAGAIN it'll be caught by tenacity retry.
-            raise error_for_code(json_resp)
+            raise errors.error_for_code(json_resp)
         return json_resp[0]
 
     def _api_account_version_and_salt(self, email):
@@ -147,7 +147,7 @@ class Mega:
 
         resp = self._api_start_session(email, user_hash)
         if isinstance(resp, int):
-            raise RequestError(resp)
+            raise errors.RequestError(resp)
         self._login_process(resp, password_aes)
 
     def login_anonymous(self):
@@ -164,7 +164,7 @@ class Mega:
 
         resp = self._api_start_session(user)
         if isinstance(resp, int):
-            raise RequestError(resp)
+            raise errors.RequestError(resp)
         self._login_process(resp, password_key)
 
     def _login_process(self, resp, password):
@@ -231,7 +231,7 @@ class Mega:
         # File urls are '#!', Folder urls are '#F!'
         match = re.findall(r'/#F?!(.*)!(.*)', url)
         if not match:
-            raise ValidationError('Invalid public url. Should have /#!id!key')
+            raise errors.ValidationError('Invalid public url. Should have /#!id!key')
 
         (public_handle, decryption_key) = match[0]
         return (public_handle, decryption_key)
@@ -435,7 +435,7 @@ class Mega:
         if 'h' in file and 'k' in file:
             public_handle = self._api_request({'a': 'l', 'n': file['h']})
             if public_handle == -11:
-                raise RequestError(
+                raise errors.RequestError(
                     "Can't get a public link from that file "
                     "(is this a shared file?)"
                 )
@@ -445,7 +445,7 @@ class Mega:
                 f'/#!{public_handle}!{decrypted_key}'
             )
         else:
-            raise ValidationError('File id and key must be present')
+            raise errors.ValidationError('File id and key must be present')
 
     def _node_data(self, node):
         try:
@@ -461,7 +461,7 @@ class Mega:
         if 'h' in file and 'k' in file:
             public_handle = self._api_request({'a': 'l', 'n': file['h']})
             if public_handle == -11:
-                raise RequestError(
+                raise errors.RequestError(
                     "Can't get a public link from that file "
                     "(is this a shared file?)"
                 )
@@ -471,7 +471,7 @@ class Mega:
                 f'/#F!{public_handle}!{decrypted_key}'
             )
         else:
-            raise ValidationError('File id and key must be present')
+            raise errors.ValidationError('File id and key must be present')
 
     def get_user(self):
         user_data = self._api_request({'a': 'ug'})
@@ -658,7 +658,7 @@ class Mega:
             try:
                 # If already exported
                 return self.get_folder_link(node)
-            except (RequestError, KeyError):
+            except (errors.RequestError, KeyError):
                 pass
 
         master_key_cipher = AES.new(a32_to_str(self.master_key), AES.MODE_ECB)
@@ -745,7 +745,7 @@ class Mega:
         # inaccessible also in the official also in the official web app.
         # Strangely, files can come back later.
         if 'g' not in file_data:
-            raise RequestError('File not accessible anymore')
+            raise errors.RequestError('File not accessible anymore')
         file_url = file_data['g']
         file_size = file_data['s']
         attribs = base64_url_decode(file_data['at'])
@@ -1040,10 +1040,10 @@ class Mega:
         elif add is False:
             l = '0'  # remove command
         else:
-            raise ValidationError('add parameter must be of type bool')
+            raise errors.ValidationError('add parameter must be of type bool')
 
         if not re.match(r"[^@]+@[^@]+\.[^@]+", email):
-            ValidationError('add_contact requires a valid email address')
+            raise errors.ValidationError('add_contact requires a valid email address')
         else:
             request = {
                 'a': 'ur',
@@ -1176,7 +1176,7 @@ class Mega:
         """
         data = self._api_request({'a': 'g', 'p': file_handle, 'ssm': 1})
         if isinstance(data, int):
-            raise RequestError(data)
+            raise errors.RequestError(data)
 
         if 'at' not in data or 's' not in data:
             raise ValueError("Unexpected result", data)

@@ -517,7 +517,7 @@ class Mega:
           'total' : the maximum space allowed with current plan
         All storage space are in bytes unless asked differently.
         """
-        if sum(1 if x else 0 for x in (kilo, mega, giga)) > 1:
+        if sum(bool(x) for x in (kilo, mega, giga)) > 1:
             raise ValueError("Only one unit prefix can be specified")
         unit_coef = 1
         if kilo:

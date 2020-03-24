@@ -188,13 +188,17 @@ class Mega:
             self.sid = base64_url_encode(sid[:43])
 
     def _parse_url(self, url):
-        # parse file id and key from url
-        if '!' in url:
-            match = re.findall(r'/#!(.*)', url)
-            path = match[0]
-            return path
-        else:
-            raise RequestError('Url key missing')
+        """
+        Given a url like 'https://mega.nz/#!fileid!filekey', return a tuple
+        (fileid, filekey).
+        """
+        # File urls are '#!', Folder urls are '#F!'
+        match = re.findall(r'/#F?!(.*)!(.*)', url)
+        if not match:
+            raise ValidationError('Invalid public url. Should have /#!id!key')
+
+        (public_handle, decryption_key) = match[0]
+        return (public_handle, decryption_key)
 
     def _process_file(self, file, shared_keys):
         if file['t'] in [NODE_TYPE_FILE, NODE_TYPE_DIR]:
@@ -545,8 +549,7 @@ class Mega:
         """
         Delete a file by its url
         """
-        path = self._parse_url(url).split('!')
-        public_handle = path[0]
+        (public_handle, decryption_key) = self._parse_url(url)
         file_id = self.get_id_from_public_handle(public_handle)
         return self.move(file_id, NODE_TYPE_TRASH)
 
@@ -565,8 +568,7 @@ class Mega:
         """
         Destroy a file by its url
         """
-        path = self._parse_url(url).split('!')
-        public_handle = path[0]
+        (public_handle, decryption_key) = self._parse_url(url)
         file_id = self.get_id_from_public_handle(public_handle)
         return self.destroy(file_id)
 
@@ -660,12 +662,10 @@ class Mega:
         """
         Download a file by it's public url
         """
-        path = self._parse_url(url).split('!')
-        file_id = path[0]
-        file_key = path[1]
+        (public_handle, decryption_key) = self._parse_url(url)
         return self._download_file(
-            file_handle=file_id,
-            file_key=file_key,
+            file_handle=public_handle,
+            file_key=decryption_key,
             dest_path=dest_path,
             dest_filename=dest_filename,
             is_public=True,
@@ -1017,16 +1017,16 @@ class Mega:
         """
         Get size and name from a public url, dict returned
         """
-        file_handle, file_key = self._parse_url(url).split('!')
-        return self.get_public_file_info(file_handle, file_key)
+        (public_handle, decryption_key) = self._parse_url(url)
+        return self.get_public_file_info(public_handle, decryption_key)
 
     def import_public_url(self, url, dest_node=None, dest_name=None):
         """
         Import the public url into user account
         """
-        file_handle, file_key = self._parse_url(url).split('!')
+        (public_handle, decryption_key) = self._parse_url(url)
         return self.import_public_file(
-            file_handle, file_key, dest_node=dest_node, dest_name=dest_name
+            public_handle, decryption_key, dest_node=dest_node, dest_name=dest_name
         )
 
     def get_public_file_info(self, file_handle, file_key):

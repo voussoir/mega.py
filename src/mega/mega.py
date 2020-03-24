@@ -969,9 +969,16 @@ class Mega:
 
         elif isinstance(target, str):
             target_node_id = target
+
+        elif isinstance(target, dict):
+            target_node_id = target['h']
+
+        elif isinstance(target, tuple):
+            target_node_id = target[1]['h']
+
         else:
-            file = target[1]
-            target_node_id = file['h']
+            raise TypeError(target)
+
         request = {
             'a': 'm',
             'n': file_id,

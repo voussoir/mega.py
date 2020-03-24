@@ -390,7 +390,6 @@ class Mega:
     def get_files(self, public_folder_handle=None):
         logger.info('Getting all files...')
 
-
         params = {}
         if public_folder_handle is not None:
             params['n'] = public_folder_handle
@@ -1063,7 +1062,6 @@ class Mega:
             return self.get_public_folder_info(public_handle, decryption_key)
         else:
             return self.get_public_file_info(public_handle, decryption_key)
-
 
     def import_public_url(self, url, dest_node=None, dest_name=None):
         """

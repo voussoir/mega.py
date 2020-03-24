@@ -19,12 +19,6 @@ from tenacity import retry, wait_exponential, retry_if_exception_type
 
 from . import crypto
 from . import errors
-from .crypto import (
-    a32_to_base64, encrypt_key, base64_url_encode, encrypt_attr, base64_to_a32,
-    base64_url_decode, decrypt_attr, a32_to_str, get_chunks, str_to_a32,
-    decrypt_key, mpi_to_int, stringhash, prepare_key, make_id, makebyte,
-    modular_inverse, interleave_xor_8
-)
 
 logger = logging.getLogger(__name__)
 
@@ -41,7 +35,7 @@ class Mega:
         self.timeout = 160  # max secs to wait for resp from api requests
         self.sid = None
         self.sequence_num = random.randint(0, 0xFFFFFFFF)
-        self.request_id = make_id(10)
+        self.request_id = crypto.make_id(10)
         self._trash_folder_node_id = None
         self.shared_keys = {}
 
@@ -128,22 +122,22 @@ class Mega:
         (account_version, user_salt) = self._api_account_version_and_salt(email)
         logger.debug('User account is version %d.', account_version)
         if account_version >= 2:
-            user_salt = base64_to_a32(user_salt)
+            user_salt = crypto.base64_to_a32(user_salt)
             # Parameters specified by MEGA's webclient security.js, search for
             # "numOfIterations" and deriveKeyWithWebCrypto to cross-reference.
             pbkdf2_key = hashlib.pbkdf2_hmac(
                 hash_name='sha512',
                 password=password.encode(),
-                salt=a32_to_str(user_salt),
+                salt=crypto.a32_to_str(user_salt),
                 iterations=100000,
                 dklen=32
             )
-            password_aes = str_to_a32(pbkdf2_key[:16])
-            user_hash = base64_url_encode(pbkdf2_key[-16:])
+            password_aes = crypto.str_to_a32(pbkdf2_key[:16])
+            user_hash = crypto.base64_url_encode(pbkdf2_key[-16:])
         else:
-            password_a32 = str_to_a32(password)
-            password_aes = prepare_key(password_a32)
-            user_hash = stringhash(email, password_aes)
+            password_a32 = crypto.str_to_a32(password)
+            password_aes = crypto.prepare_key(password_a32)
+            user_hash = crypto.stringhash(email, password_aes)
 
         resp = self._api_start_session(email, user_hash)
         if isinstance(resp, int):
@@ -156,10 +150,10 @@ class Mega:
         password_key = [random.randint(0, 0xFFFFFFFF)] * 4
         session_self_challenge = [random.randint(0, 0xFFFFFFFF)] * 4
 
-        k = a32_to_base64(encrypt_key(master_key, password_key))
-        ts = a32_to_str(session_self_challenge)
-        ts += a32_to_str(encrypt_key(session_self_challenge, master_key))
-        ts = base64_url_encode(ts)
+        k = crypto.a32_to_base64(crypto.encrypt_key(master_key, password_key))
+        ts = crypto.a32_to_str(session_self_challenge)
+        ts += crypto.a32_to_str(crypto.encrypt_key(session_self_challenge, master_key))
+        ts = crypto.base64_url_encode(ts)
         user = self._api_request({'a': 'up', 'k': k, 'ts': ts})
 
         resp = self._api_start_session(user)
@@ -168,24 +162,24 @@ class Mega:
         self._login_process(resp, password_key)
 
     def _login_process(self, resp, password):
-        encrypted_master_key = base64_to_a32(resp['k'])
-        self.master_key = decrypt_key(encrypted_master_key, password)
+        encrypted_master_key = crypto.base64_to_a32(resp['k'])
+        self.master_key = crypto.decrypt_key(encrypted_master_key, password)
         # tsid is for temporary sessions
         if 'tsid' in resp:
-            tsid = base64_url_decode(resp['tsid'])
-            key_encrypted = a32_to_str(
-                encrypt_key(str_to_a32(tsid[:16]), self.master_key)
+            tsid = crypto.base64_url_decode(resp['tsid'])
+            key_encrypted = crypto.a32_to_str(
+                crypto.encrypt_key(crypto.str_to_a32(tsid[:16]), self.master_key)
             )
             if key_encrypted == tsid[-16:]:
                 self.sid = resp['tsid']
         # csid is for user logins
         elif 'csid' in resp:
-            encrypted_rsa_private_key = base64_to_a32(resp['privk'])
-            rsa_private_key = decrypt_key(
+            encrypted_rsa_private_key = crypto.base64_to_a32(resp['privk'])
+            rsa_private_key = crypto.decrypt_key(
                 encrypted_rsa_private_key, self.master_key
             )
 
-            private_key = a32_to_str(rsa_private_key)
+            private_key = crypto.a32_to_str(rsa_private_key)
             # The private_key contains 4 MPI integers concatenated together.
             rsa_private_key = [0, 0, 0, 0]
             for i in range(4):
@@ -195,7 +189,7 @@ class Mega:
                 bytelength = math.ceil(bitlength / 8)
                 # Add 2 bytes to accommodate the MPI header
                 bytelength += 2
-                rsa_private_key[i] = mpi_to_int(private_key[:bytelength])
+                rsa_private_key[i] = crypto.mpi_to_int(private_key[:bytelength])
                 private_key = private_key[bytelength:]
 
             first_factor_p = rsa_private_key[0]
@@ -206,7 +200,7 @@ class Mega:
             # RSA.construct and it does not seem to be necessary.
             rsa_modulus_n = first_factor_p * second_factor_q
             phi = (first_factor_p - 1) * (second_factor_q - 1)
-            public_exponent_e = modular_inverse(private_exponent_d, phi)
+            public_exponent_e = crypto.modular_inverse(private_exponent_d, phi)
 
             rsa_components = (
                 rsa_modulus_n,
@@ -217,11 +211,11 @@ class Mega:
             )
             rsa_decrypter = RSA.construct(rsa_components)
 
-            encrypted_sid = mpi_to_int(base64_url_decode(resp['csid']))
+            encrypted_sid = crypto.mpi_to_int(crypto.base64_url_decode(resp['csid']))
 
             sid = '%x' % rsa_decrypter._decrypt(encrypted_sid)
             sid = binascii.unhexlify('0' + sid if len(sid) % 2 else sid)
-            self.sid = base64_url_encode(sid[:43])
+            self.sid = crypto.base64_url_encode(sid[:43])
 
     def _parse_url(self, url):
         """
@@ -247,13 +241,13 @@ class Mega:
             key = None
             # my objects
             if uid in keys:
-                key = decrypt_key(base64_to_a32(keys[uid]), self.master_key)
+                key = crypto.decrypt_key(crypto.base64_to_a32(keys[uid]), self.master_key)
             # shared folders
             elif 'su' in file and 'sk' in file and ':' in file['k']:
-                shared_key = decrypt_key(
-                    base64_to_a32(file['sk']), self.master_key
+                shared_key = crypto.decrypt_key(
+                    crypto.base64_to_a32(file['sk']), self.master_key
                 )
-                key = decrypt_key(base64_to_a32(keys[file['h']]), shared_key)
+                key = crypto.decrypt_key(crypto.base64_to_a32(keys[file['h']]), shared_key)
                 if file['su'] not in self.shared_keys:
                     self.shared_keys[file['su']] = {}
                 self.shared_keys[file['su']][file['h']] = shared_key
@@ -263,26 +257,26 @@ class Mega:
                     shared_key = self.shared_keys[file['u']][hkey]
                     if hkey in keys:
                         key = keys[hkey]
-                        key = decrypt_key(base64_to_a32(key), shared_key)
+                        key = crypto.decrypt_key(crypto.base64_to_a32(key), shared_key)
                         break
             if file['h'] and file['h'] in self.shared_keys.get('EXP', ()):
                 shared_key = self.shared_keys['EXP'][file['h']]
-                encrypted_key = str_to_a32(
-                    base64_url_decode(file['k'].split(':')[-1])
+                encrypted_key = crypto.str_to_a32(
+                    crypto.base64_url_decode(file['k'].split(':')[-1])
                 )
-                key = decrypt_key(encrypted_key, shared_key)
+                key = crypto.decrypt_key(encrypted_key, shared_key)
                 file['shared_folder_key'] = shared_key
             if key is not None:
                 if file['t'] == NODE_TYPE_FILE:
-                    k = interleave_xor_8(key)
+                    k = crypto.interleave_xor_8(key)
                     file['iv'] = key[4:6] + (0, 0)
                     file['meta_mac'] = key[6:8]
                 else:
                     k = key
                 file['key'] = key
                 file['k'] = k
-                attributes = base64_url_decode(file['a'])
-                attributes = decrypt_attr(attributes, k)
+                attributes = crypto.base64_url_decode(file['a'])
+                attributes = crypto.decrypt_attr(attributes, k)
                 file['a'] = attributes
             # other => wrong object
             elif file['k'] == '':
@@ -309,8 +303,8 @@ class Mega:
         ok_dict = {}
 
         for ok_item in files.get('ok', []):
-            shared_key = decrypt_key(
-                base64_to_a32(ok_item['k']), self.master_key
+            shared_key = crypto.decrypt_key(
+                crypto.base64_to_a32(ok_item['k']), self.master_key
             )
             ok_dict[ok_item['h']] = shared_key
         for s_item in files.get('s', []):
@@ -414,8 +408,8 @@ class Mega:
             file = file['f'][0]
             public_handle = self._api_request({'a': 'l', 'n': file['h']})
             file_key = file['k'][file['k'].index(':') + 1:]
-            decrypted_key = a32_to_base64(
-                decrypt_key(base64_to_a32(file_key), self.master_key)
+            decrypted_key = crypto.a32_to_base64(
+                crypto.decrypt_key(crypto.base64_to_a32(file_key), self.master_key)
             )
             return (
                 f'{self.schema}://{self.domain}'
@@ -439,7 +433,7 @@ class Mega:
                     "Can't get a public link from that file "
                     "(is this a shared file?)"
                 )
-            decrypted_key = a32_to_base64(file['key'])
+            decrypted_key = crypto.a32_to_base64(file['key'])
             return (
                 f'{self.schema}://{self.domain}'
                 f'/#!{public_handle}!{decrypted_key}'
@@ -465,7 +459,7 @@ class Mega:
                     "Can't get a public link from that file "
                     "(is this a shared file?)"
                 )
-            decrypted_key = a32_to_base64(file['shared_folder_key'])
+            decrypted_key = crypto.a32_to_base64(file['shared_folder_key'])
             return (
                 f'{self.schema}://{self.domain}'
                 f'/#F!{public_handle}!{decrypted_key}'
@@ -661,18 +655,18 @@ class Mega:
             except (errors.RequestError, KeyError):
                 pass
 
-        master_key_cipher = AES.new(a32_to_str(self.master_key), AES.MODE_ECB)
-        ha = base64_url_encode(
+        master_key_cipher = AES.new(crypto.a32_to_str(self.master_key), AES.MODE_ECB)
+        ha = crypto.base64_url_encode(
             master_key_cipher.encrypt(node_data['h'].encode("utf8") + node_data['h'].encode("utf8"))
         )
 
         share_key = secrets.token_bytes(16)
-        ok = base64_url_encode(master_key_cipher.encrypt(share_key))
+        ok = crypto.base64_url_encode(master_key_cipher.encrypt(share_key))
 
         share_key_cipher = AES.new(share_key, AES.MODE_ECB)
         node_key = node_data['k']
-        encrypted_node_key = base64_url_encode(
-            share_key_cipher.encrypt(a32_to_str(node_key))
+        encrypted_node_key = crypto.base64_url_encode(
+            share_key_cipher.encrypt(crypto.a32_to_str(node_key))
         )
 
         node_id = node_data['h']
@@ -718,7 +712,7 @@ class Mega:
     ):
         if file is None:
             if is_public:
-                file_key = base64_to_a32(file_key)
+                file_key = crypto.base64_to_a32(file_key)
                 request = {
                     'a': 'g',
                     'g': 1,
@@ -732,7 +726,7 @@ class Mega:
                 }
             file_data = self._api_request(request)
 
-            k = interleave_xor_8(file_key)
+            k = crypto.interleave_xor_8(file_key)
             iv = file_key[4:6] + (0, 0)
             meta_mac = file_key[6:8]
         else:
@@ -748,8 +742,8 @@ class Mega:
             raise errors.RequestError('File not accessible anymore')
         file_url = file_data['g']
         file_size = file_data['s']
-        attribs = base64_url_decode(file_data['at'])
-        attribs = decrypt_attr(attribs, k)
+        attribs = crypto.base64_url_decode(file_data['at'])
+        attribs = crypto.decrypt_attr(attribs, k)
 
         if dest_filename is not None:
             file_name = dest_filename
@@ -766,7 +760,7 @@ class Mega:
         with tempfile.NamedTemporaryFile(
             mode='w+b', prefix='megapy_', delete=False
         ) as temp_output_file:
-            k_str = a32_to_str(k)
+            k_str = crypto.a32_to_str(k)
             counter = Counter.new(
                 128, initial_value=((iv[0] << 32) + iv[1]) << 64
             )
@@ -774,9 +768,9 @@ class Mega:
 
             mac_str = '\0' * 16
             mac_encryptor = AES.new(k_str, AES.MODE_CBC, mac_str.encode("utf8"))
-            iv_str = a32_to_str([iv[0], iv[1], iv[0], iv[1]])
+            iv_str = crypto.a32_to_str([iv[0], iv[1], iv[0], iv[1]])
 
-            for chunk_start, chunk_size in get_chunks(file_size):
+            for chunk_start, chunk_size in crypto.get_chunks(file_size):
                 chunk = input_file.read(chunk_size)
                 chunk = aes.decrypt(chunk)
                 temp_output_file.write(chunk)
@@ -801,7 +795,7 @@ class Mega:
                 logger.info(
                     '%s of %s downloaded', file_info.st_size, file_size
                 )
-            file_mac = str_to_a32(mac_str)
+            file_mac = crypto.str_to_a32(mac_str)
             # check mac integrity
             if (
                 file_mac[0] ^ file_mac[1], file_mac[2] ^ file_mac[3]
@@ -826,7 +820,7 @@ class Mega:
 
             # generate random aes key (128) for file
             ul_key = [random.randint(0, 0xFFFFFFFF) for _ in range(6)]
-            k_str = a32_to_str(ul_key[:4])
+            k_str = crypto.a32_to_str(ul_key[:4])
             count = Counter.new(
                 128, initial_value=((ul_key[4] << 32) + ul_key[5]) << 64
             )
@@ -837,9 +831,9 @@ class Mega:
 
             mac_str = '\0' * 16
             mac_encryptor = AES.new(k_str, AES.MODE_CBC, mac_str.encode("utf8"))
-            iv_str = a32_to_str([ul_key[4], ul_key[5], ul_key[4], ul_key[5]])
+            iv_str = crypto.a32_to_str([ul_key[4], ul_key[5], ul_key[4], ul_key[5]])
             if file_size > 0:
-                for chunk_start, chunk_size in get_chunks(file_size):
+                for chunk_start, chunk_size in crypto.get_chunks(file_size):
                     chunk = input_file.read(chunk_size)
                     upload_progress += len(chunk)
 
@@ -856,7 +850,7 @@ class Mega:
 
                     block = chunk[i:i + 16]
                     if len(block) % 16:
-                        block += makebyte('\0' * (16 - len(block) % 16))
+                        block += crypto.makebyte('\0' * (16 - len(block) % 16))
                     mac_str = mac_encryptor.encrypt(encryptor.encrypt(block))
 
                     # encrypt file and upload
@@ -879,7 +873,7 @@ class Mega:
             logger.info('Chunks uploaded')
             logger.info('Setting attributes to complete upload')
             logger.info('Computing attributes')
-            file_mac = str_to_a32(mac_str)
+            file_mac = crypto.str_to_a32(mac_str)
 
             # determine meta mac
             meta_mac = (file_mac[0] ^ file_mac[1], file_mac[2] ^ file_mac[3])
@@ -887,15 +881,15 @@ class Mega:
             dest_filename = dest_filename or os.path.basename(filename)
             attribs = {'n': dest_filename}
 
-            encrypt_attribs = base64_url_encode(
-                encrypt_attr(attribs, ul_key[:4])
+            encrypt_attribs = crypto.base64_url_encode(
+                crypto.encrypt_attr(attribs, ul_key[:4])
             )
             key = [
                 ul_key[0] ^ ul_key[4], ul_key[1] ^ ul_key[5],
                 ul_key[2] ^ meta_mac[0], ul_key[3] ^ meta_mac[1], ul_key[4],
                 ul_key[5], meta_mac[0], meta_mac[1]
             ]
-            encrypted_key = a32_to_base64(encrypt_key(key, self.master_key))
+            encrypted_key = crypto.a32_to_base64(crypto.encrypt_key(key, self.master_key))
             logger.info('Sending request to update attributes')
             # update attributes
             request = {
@@ -921,8 +915,8 @@ class Mega:
 
         # encrypt attribs
         attribs = {'n': name}
-        encrypt_attribs = base64_url_encode(encrypt_attr(attribs, ul_key[:4]))
-        encrypted_key = a32_to_base64(encrypt_key(ul_key[:4], self.master_key))
+        encrypt_attribs = crypto.base64_url_encode(crypto.encrypt_attr(attribs, ul_key[:4]))
+        encrypted_key = crypto.a32_to_base64(crypto.encrypt_key(ul_key[:4], self.master_key))
 
         # update attributes
         request = {
@@ -973,9 +967,9 @@ class Mega:
         # create new attribs
         attribs = {'n': new_name}
         # encrypt attribs
-        encrypt_attribs = base64_url_encode(encrypt_attr(attribs, file['k']))
-        encrypted_key = a32_to_base64(
-            encrypt_key(file['key'], self.master_key)
+        encrypt_attribs = crypto.base64_url_encode(crypto.encrypt_attr(attribs, file['k']))
+        encrypted_key = crypto.a32_to_base64(
+            crypto.encrypt_key(file['key'], self.master_key)
         )
         # update attributes
         request = {
@@ -1115,7 +1109,7 @@ class Mega:
         else:
             raise TypeError(f'Invalid dest_node {dest_node}.')
 
-        folder_key = base64_to_a32(folder_key)
+        folder_key = crypto.base64_to_a32(folder_key)
 
         nodes = self.get_public_folder_files(folder_handle)
 
@@ -1134,8 +1128,8 @@ class Mega:
         import_list = []
         for node in nodes:
             k = node['k'].split(':')[1]
-            k = decrypt_key(base64_to_a32(k), folder_key)
-            new_k = a32_to_base64(encrypt_key(k, self.master_key))
+            k = crypto.decrypt_key(crypto.base64_to_a32(k), folder_key)
+            new_k = crypto.a32_to_base64(crypto.encrypt_key(k, self.master_key))
 
             node_import_args = {
                 'h': node['h'],
@@ -1147,7 +1141,7 @@ class Mega:
                 # This is the root public folder.
                 if dest_name is not None:
                     new_a = {'n': dest_name}
-                    new_a = base64_url_encode(encrypt_attr(new_a, k))
+                    new_a = crypto.base64_url_encode(crypto.encrypt_attr(new_a, k))
                     node_import_args['a'] = new_a
                 else:
                     node_import_args['a'] = node['a']
@@ -1181,11 +1175,11 @@ class Mega:
         if 'at' not in data or 's' not in data:
             raise ValueError("Unexpected result", data)
 
-        key = base64_to_a32(file_key)
-        k = interleave_xor_8(key)
+        key = crypto.base64_to_a32(file_key)
+        k = crypto.interleave_xor_8(key)
 
         size = data['s']
-        unencrypted_attrs = decrypt_attr(base64_url_decode(data['at']), k)
+        unencrypted_attrs = crypto.decrypt_attr(crypto.base64_url_decode(data['at']), k)
         if not unencrypted_attrs:
             return None
         result = {'size': size, 'name': unencrypted_attrs['n']}
@@ -1206,11 +1200,11 @@ class Mega:
             pl_info = self.get_public_file_info(file_handle, file_key)
             dest_name = pl_info['name']
 
-        key = base64_to_a32(file_key)
-        k = interleave_xor_8(key)
+        key = crypto.base64_to_a32(file_key)
+        k = crypto.interleave_xor_8(key)
 
-        encrypted_key = a32_to_base64(encrypt_key(key, self.master_key))
-        encrypted_name = base64_url_encode(encrypt_attr({'n': dest_name}, k))
+        encrypted_key = crypto.a32_to_base64(crypto.encrypt_key(key, self.master_key))
+        encrypted_name = crypto.base64_url_encode(crypto.encrypt_attr({'n': dest_name}, k))
         request = {
             'a': 'p',
             't': dest_node['h'],

@@ -42,6 +42,37 @@ class Mega:
             options = {}
         self.options = options
 
+    @retry(
+        retry=retry_if_exception_type(RuntimeError),
+        wait=wait_exponential(multiplier=2, min=2, max=60)
+    )
+    def _api_request(self, data):
+        params = {'id': self.sequence_num}
+        self.sequence_num += 1
+
+        if self.sid:
+            params.update({'sid': self.sid})
+
+        # ensure input data is a list
+        if not isinstance(data, list):
+            data = [data]
+
+        url = f'{self.schema}://g.api.{self.domain}/cs'
+        req = requests.post(
+            url,
+            params=params,
+            data=json.dumps(data),
+            timeout=self.timeout,
+        )
+        json_resp = json.loads(req.text)
+        if isinstance(json_resp, int):
+            if json_resp == -3:
+                msg = 'Request failed, retrying'
+                logger.info(msg)
+                raise RuntimeError(msg)
+            raise error_for_code(json_resp)
+        return json_resp[0]
+
     def login(self, email=None, password=None):
         if email:
             self._login_user(email, password)
@@ -157,37 +188,6 @@ class Mega:
             sid = '%x' % rsa_decrypter._decrypt(encrypted_sid)
             sid = binascii.unhexlify('0' + sid if len(sid) % 2 else sid)
             self.sid = base64_url_encode(sid[:43])
-
-    @retry(
-        retry=retry_if_exception_type(RuntimeError),
-        wait=wait_exponential(multiplier=2, min=2, max=60)
-    )
-    def _api_request(self, data):
-        params = {'id': self.sequence_num}
-        self.sequence_num += 1
-
-        if self.sid:
-            params.update({'sid': self.sid})
-
-        # ensure input data is a list
-        if not isinstance(data, list):
-            data = [data]
-
-        url = f'{self.schema}://g.api.{self.domain}/cs'
-        req = requests.post(
-            url,
-            params=params,
-            data=json.dumps(data),
-            timeout=self.timeout,
-        )
-        json_resp = json.loads(req.text)
-        if isinstance(json_resp, int):
-            if json_resp == -3:
-                msg = 'Request failed, retrying'
-                logger.info(msg)
-                raise RuntimeError(msg)
-            raise error_for_code(json_resp)
-        return json_resp[0]
 
     def _parse_url(self, url):
         # parse file id and key from url

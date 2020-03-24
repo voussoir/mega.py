@@ -1062,10 +1062,14 @@ class Mega:
 
     def get_public_url_info(self, url):
         """
-        Get size and name from a public url, dict returned
+        Dispatch to get_public_folder_info and get_public_file_info.
         """
         (public_handle, decryption_key) = self._parse_url(url)
-        return self.get_public_file_info(public_handle, decryption_key)
+        if '/#F!' in url:
+            return self.get_public_folder_info(public_handle, decryption_key)
+        else:
+            return self.get_public_file_info(public_handle, decryption_key)
+
 
     def import_public_url(self, url, dest_node=None, dest_name=None):
         """
@@ -1081,6 +1085,18 @@ class Mega:
         # TODO: cross-reference process_files code and figure out how to
         # decrypt them
         return self.get_files(public_folder_handle=folder_handle)
+
+    def get_public_folder_info(self, folder_handle, folder_key):
+        """
+        Get the total size of a public folder.
+        """
+        # At the moment, the key is not actually needed. However if we decide
+        # to extract more statistics, then we may need it and I'd rather not
+        # change the function interface when that happens. So let's just take
+        # the key now even though it does nothing.
+        files = self.get_public_folder_files(folder_handle).values()
+        size = sum(file['s'] for file in files if file['t'] == NODE_TYPE_FILE)
+        return {'size': size}
 
 
     def get_public_file_info(self, file_handle, file_key):

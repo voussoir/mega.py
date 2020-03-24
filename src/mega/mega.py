@@ -15,7 +15,7 @@ import tempfile
 import shutil
 
 import requests
-from tenacity import retry, wait_exponential, retry_if_exception_type
+import tenacity
 
 from . import crypto
 from . import errors
@@ -43,9 +43,9 @@ class Mega:
             options = {}
         self.options = options
 
-    @retry(
-        retry=retry_if_exception_type(errors.EAGAIN),
-        wait=wait_exponential(multiplier=2, min=2, max=60)
+    @tenacity.retry(
+        retry=tenacity.retry_if_exception_type(errors.EAGAIN),
+        wait=tenacity.wait_exponential(multiplier=2, min=2, max=60)
     )
     def _api_request(self, data, params={}):
         req_params = {'id': self.sequence_num}

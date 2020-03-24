@@ -136,6 +136,7 @@ class Mega:
     def _login_process(self, resp, password):
         encrypted_master_key = base64_to_a32(resp['k'])
         self.master_key = decrypt_key(encrypted_master_key, password)
+        # tsid is for temporary sessions
         if 'tsid' in resp:
             tsid = base64_url_decode(resp['tsid'])
             key_encrypted = a32_to_str(
@@ -143,6 +144,7 @@ class Mega:
             )
             if key_encrypted == tsid[-16:]:
                 self.sid = resp['tsid']
+        # csid is for user logins
         elif 'csid' in resp:
             encrypted_rsa_private_key = base64_to_a32(resp['privk'])
             rsa_private_key = decrypt_key(
@@ -290,7 +292,7 @@ class Mega:
         """
         Find descriptor of folder inside a path. i.e.: folder1/folder2/folder3
         Params:
-            path, string like folder1/folder2/folder3
+            path: string like 'folder1/folder2/folder3'
         Return:
             Descriptor (str) of folder3 if exists, None otherwise
         """
@@ -369,7 +371,7 @@ class Mega:
 
     def get_upload_link(self, file):
         """
-        Get a files public link inc. decrypted key
+        Get a file's public link including decryption key
         Requires upload() response as input
         """
         if 'f' in file:
@@ -442,12 +444,11 @@ class Mega:
     def get_node_by_type(self, type):
         """
         Get a node by it's numeric type id, e.g:
-        0: file
-        1: dir
         2: special: root cloud drive
         3: special: inbox
-        4: special trash bin
+        4: special: trash bin
         """
+        # Should we also check for NODE_TYPE_FILE, NODE_TYPE_DIR here?
         nodes = self.get_files()
         for node in list(nodes.items()):
             if node[1]['t'] == type:
@@ -468,6 +469,7 @@ class Mega:
             node_id = [target]
 
         files = self._api_request({'a': 'f', 'c': 1})
+        # MERGE COMMON CODE WITH GET_FILES
         files_dict = {}
         shared_keys = {}
         self._init_shared_keys(files, shared_keys)
@@ -478,7 +480,6 @@ class Mega:
         return files_dict
 
     def get_id_from_public_handle(self, public_handle):
-        # get node data
         node_data = self._api_request({'a': 'f', 'f': 1, 'p': public_handle})
         node_id = self.get_id_from_obj(node_data)
         return node_id
@@ -1031,7 +1032,7 @@ class Mega:
 
     def get_public_file_info(self, file_handle, file_key):
         """
-        Get size and name of a public file
+        Get size and name of a public file.
         """
         data = self._api_request({'a': 'g', 'p': file_handle, 'ssm': 1})
         if isinstance(data, int):

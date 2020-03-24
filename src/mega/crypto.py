@@ -43,6 +43,9 @@ def aes_cbc_decrypt_a32(data, key):
 
 
 def stringhash(str, aeskey):
+    """
+    As defined by MEGA's weblient crypto.js. Search for "function stringhash".
+    """
     s32 = str_to_a32(str)
     h32 = [0, 0, 0, 0]
     for i in range(len(s32)):
@@ -153,6 +156,10 @@ def a32_to_base64(a):
 
 
 def get_chunks(size):
+    """
+    Given the size of a file in bytes, return tuples (chunk_start, chunk_size)
+    for the purposes of downloading or uploading a file in chunks.
+    """
     p = 0
     s = 0x20000
     while p + s < size:

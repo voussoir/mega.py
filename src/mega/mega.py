@@ -1076,9 +1076,20 @@ class Mega:
         Import the public url into user account
         """
         (public_handle, decryption_key) = self._parse_url(url)
-        return self.import_public_file(
-            public_handle, decryption_key, dest_node=dest_node, dest_name=dest_name
-        )
+        if '/#F!' in url:
+            return self.import_public_folder(
+                public_handle,
+                decryption_key,
+                dest_node=dest_node,
+                dest_name=dest_name
+            )
+        else:
+            return self.import_public_file(
+                public_handle,
+                decryption_key,
+                dest_node=dest_node,
+                dest_name=dest_name
+            )
 
     def get_public_folder_files(self, folder_handle):
         # At the moment, the returned files will not have a decrypted 'a'.
@@ -1098,6 +1109,74 @@ class Mega:
         size = sum(file['s'] for file in files if file['t'] == NODE_TYPE_FILE)
         return {'size': size}
 
+    def import_public_folder(
+        self, folder_handle, folder_key, dest_node=None, dest_name=None
+    ):
+        if dest_node is None:
+            dest_node = self.get_node_by_type(NODE_TYPE_ROOT)[1]['h']
+        elif isinstance(dest_node, int):
+            dest_node = self.get_node_by_type(dest_node)[1]
+        elif isinstance(dest_node, dict):
+            dest_node = dest_node['h']
+        elif isinstance(dest_node, str):
+            pass
+        else:
+            raise TypeError(f'Invalid dest_node {dest_node}.')
+
+        folder_key = base64_to_a32(folder_key)
+
+        nodes = self.get_public_folder_files(folder_handle)
+
+        # For all files and folders in the public folder, their 'p' will
+        # correspond to the 'h' of either the public folder, or some nested
+        # folder within. But, the public folder itself will have a 'p' that
+        # does not correspond to any 'h'.  In this first loop, we gather the
+        # 'h' of all folders, so that in the next loop we can tell if we are
+        # processing the root folder by checking that its 'p' is not a known
+        # folder's 'h'.
+        folder_ids = set()
+        for node in nodes:
+            if node['t'] == NODE_TYPE_DIR:
+                folder_ids.add(node['h'])
+
+        import_list = []
+        for node in nodes:
+            k = node['k'].split(':')[1]
+            k = decrypt_key(base64_to_a32(k), folder_key)
+            new_k = a32_to_base64(encrypt_key(k, self.master_key))
+
+            node_import_args = {
+                'h': node['h'],
+                'k': new_k,
+                't': node['t'],
+            }
+
+            if node['p'] not in folder_ids:
+                # This is the root public folder.
+                if dest_name is not None:
+                    new_a = {'n': dest_name}
+                    new_a = base64_url_encode(encrypt_attr(new_a, k))
+                    node_import_args['a'] = new_a
+                else:
+                    node_import_args['a'] = node['a']
+
+                # The root should not have a 'p' argument.
+
+            else:
+                node_import_args['a'] = node['a']
+                node_import_args['p'] = node['p']
+
+            import_list.append(node_import_args)
+
+        request = {
+            'a': 'p',
+            't': dest_node,
+            'n': import_list,
+            'v': 3,
+            'i': self.request_id,
+            'sm': 1,
+        }
+        return self._api_request(request)
 
     def get_public_file_info(self, file_handle, file_key):
         """

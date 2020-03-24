@@ -46,12 +46,14 @@ class Mega:
         retry=retry_if_exception_type(RuntimeError),
         wait=wait_exponential(multiplier=2, min=2, max=60)
     )
-    def _api_request(self, data):
-        params = {'id': self.sequence_num}
+    def _api_request(self, data, params={}):
+        req_params = {'id': self.sequence_num}
         self.sequence_num += 1
 
         if self.sid:
-            params.update({'sid': self.sid})
+            req_params.update({'sid': self.sid})
+
+        req_params.update(params)
 
         # ensure input data is a list
         if not isinstance(data, list):
@@ -60,7 +62,7 @@ class Mega:
         url = f'{self.schema}://g.api.{self.domain}/cs'
         req = requests.post(
             url,
-            params=params,
+            params=req_params,
             data=json.dumps(data),
             timeout=self.timeout,
         )

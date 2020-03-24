@@ -609,8 +609,8 @@ class Mega:
         return self.get_link(node)
 
     def export(self, path=None, node_id=None):
-        nodes = self.get_files()
         if node_id:
+            nodes = self.get_files()
             node = nodes[node_id]
         else:
             node = self.find(path)

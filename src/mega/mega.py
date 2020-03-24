@@ -310,12 +310,13 @@ class Mega:
         Keys are stored in files['s'] and files['ok']
         """
         ok_dict = {}
-        for ok_item in files['ok']:
+
+        for ok_item in files.get('ok', []):
             shared_key = decrypt_key(
                 base64_to_a32(ok_item['k']), self.master_key
             )
             ok_dict[ok_item['h']] = shared_key
-        for s_item in files['s']:
+        for s_item in files.get('s', []):
             if s_item['u'] not in self.shared_keys:
                 self.shared_keys[s_item['u']] = {}
             if s_item['h'] in ok_dict:
@@ -389,9 +390,16 @@ class Mega:
                     continue
                 return file
 
-    def get_files(self):
+    def get_files(self, public_folder_handle=None):
         logger.info('Getting all files...')
-        files = self._api_request({'a': 'f', 'c': 1, 'r': 1})
+
+
+        params = {}
+        if public_folder_handle is not None:
+            params['n'] = public_folder_handle
+
+        files = self._api_request({'a': 'f', 'c': 1, 'r': 1}, params=params)
+
         files_dict = {}
         self._init_shared_keys(files)
         for file in files['f']:
@@ -1067,6 +1075,13 @@ class Mega:
         return self.import_public_file(
             public_handle, decryption_key, dest_node=dest_node, dest_name=dest_name
         )
+
+    def get_public_folder_files(self, folder_handle):
+        # At the moment, the returned files will not have a decrypted 'a'.
+        # TODO: cross-reference process_files code and figure out how to
+        # decrypt them
+        return self.get_files(public_folder_handle=folder_handle)
+
 
     def get_public_file_info(self, file_handle, file_key):
         """

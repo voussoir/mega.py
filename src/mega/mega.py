@@ -28,6 +28,11 @@ from .crypto import (
 
 logger = logging.getLogger(__name__)
 
+NODE_TYPE_FILE = 0
+NODE_TYPE_DIR = 1
+NODE_TYPE_ROOT = 2
+NODE_TYPE_INBOX = 3
+NODE_TYPE_TRASH = 4
 
 class Mega:
     def __init__(self, options=None):
@@ -80,7 +85,7 @@ class Mega:
             self._login_user(email, password)
         else:
             self.login_anonymous()
-        self._trash_folder_node_id = self.get_node_by_type(4)[0]
+        self._trash_folder_node_id = self.get_node_by_type(NODE_TYPE_TRASH)[0]
         logger.info('Login complete')
         return self
 
@@ -201,7 +206,7 @@ class Mega:
             raise RequestError('Url key missing')
 
     def _process_file(self, file, shared_keys):
-        if file['t'] == 0 or file['t'] == 1:
+        if file['t'] in [NODE_TYPE_FILE, NODE_TYPE_DIR]:
             keys = dict(
                 keypart.split(':', 1)
                 for keypart in file['k'].split('/')
@@ -237,15 +242,13 @@ class Mega:
                 key = decrypt_key(encrypted_key, shared_key)
                 file['shared_folder_key'] = shared_key
             if key is not None:
-                # file
-                if file['t'] == 0:
+                if file['t'] == NODE_TYPE_FILE:
                     k = (
                         key[0] ^ key[4], key[1] ^ key[5], key[2] ^ key[6],
                         key[3] ^ key[7]
                     )
                     file['iv'] = key[4:6] + (0, 0)
                     file['meta_mac'] = key[6:8]
-                # folder
                 else:
                     k = key
                 file['key'] = key
@@ -256,13 +259,13 @@ class Mega:
             # other => wrong object
             elif file['k'] == '':
                 file['a'] = False
-        elif file['t'] == 2:
+        elif file['t'] == NODE_TYPE_ROOT:
             self.root_id = file['h']
             file['a'] = {'n': 'Cloud Drive'}
-        elif file['t'] == 3:
+        elif file['t'] == NODE_TYPE_INBOX:
             self.inbox_id = file['h']
             file['a'] = {'n': 'Inbox'}
-        elif file['t'] == 4:
+        elif file['t'] == NODE_TYPE_TRASH:
             self.trashbin_id = file['h']
             file['a'] = {'n': 'Rubbish Bin'}
         return file
@@ -457,10 +460,14 @@ class Mega:
 
     def get_files_in_node(self, target):
         """
-        Get all files in a given target, e.g. 4=trash
+        Get all files in a given target.
+        Params:
+            target: a node's id string, or one of the special nodes
+                e.g. NODE_TYPE_TRASH.
         """
         if type(target) == int:
-            # convert special nodes (e.g. trash)
+            if target in [NODE_TYPE_FILE, NODE_TYPE_DIR]:
+                raise TypeError('Can\'t use file or dir node type.')
             node_id = self.get_node_by_type(target)
         else:
             node_id = [target]
@@ -542,7 +549,7 @@ class Mega:
         """
         Delete a file by its public handle
         """
-        return self.move(public_handle, 4)
+        return self.move(public_handle, NODE_TYPE_TRASH)
 
     def delete_url(self, url):
         """
@@ -551,7 +558,7 @@ class Mega:
         path = self._parse_url(url).split('!')
         public_handle = path[0]
         file_id = self.get_id_from_public_handle(public_handle)
-        return self.move(file_id, 4)
+        return self.move(file_id, NODE_TYPE_TRASH)
 
     def destroy(self, file_id):
         """
@@ -576,7 +583,7 @@ class Mega:
 
     def empty_trash(self):
         # get list of files in rubbish out
-        files = self.get_files_in_node(4)
+        files = self.get_files_in_node(NODE_TYPE_TRASH)
 
         # make a list of json
         if files != {}:
@@ -617,7 +624,7 @@ class Mega:
             node = self.find(path)
 
         node_data = self._node_data(node)
-        is_file_node = node_data['t'] == 0
+        is_file_node = node_data['t'] == NODE_TYPE_FILE
         if is_file_node:
             return self._export_file(node)
         if node:
@@ -880,7 +887,7 @@ class Mega:
                     'n': [
                         {
                             'h': completion_file_handle,
-                            't': 0,
+                            't': NODE_TYPE_FILE,
                             'a': encrypt_attribs,
                             'k': encrypted_key
                         }
@@ -907,7 +914,7 @@ class Mega:
                 'n': [
                     {
                         'h': 'xxxxxxxx',
-                        't': 1,
+                        't': NODE_TYPE_DIR,
                         'a': encrypt_attribs,
                         'k': encrypted_key
                     }
@@ -969,27 +976,16 @@ class Mega:
     def move(self, file_id, target):
         """
         Move a file to another parent node
-        params:
-        a : command
-        n : node we're moving
-        t : id of target parent node, moving to
-        i : request id
 
-        targets
-        2 : root
-        3 : inbox
-        4 : trash
-
-        or...
-        target's id
-        or...
-        target's structure returned by find()
+        Params:
+            file_id: the file to move.
+            target: a node's id string, or one of the special nodes
+                e.g. NODE_TYPE_TRASH, or the structure returned by find().
         """
-
-        # determine target_node_id
-        if type(target) == int:
+        if isinstance(target, int):
             target_node_id = str(self.get_node_by_type(target)[0])
-        elif type(target) in (str, ):
+
+        elif isinstance(target, str):
             target_node_id = target
         else:
             file = target[1]
@@ -1085,8 +1081,7 @@ class Mega:
         """
         # Providing dest_node spare an API call to retrieve it.
         if dest_node is None:
-            # Get '/Cloud Drive' folder no dest node specified
-            dest_node = self.get_node_by_type(2)[1]
+            dest_node = self.get_node_by_type(NODE_TYPE_ROOT)[1]
 
         # Providing dest_name spares an API call to retrieve it.
         if dest_name is None:
@@ -1107,7 +1102,7 @@ class Mega:
                 'n': [
                     {
                         'ph': file_handle,
-                        't': 0,
+                        't': NODE_TYPE_FILE,
                         'a': encrypted_name,
                         'k': encrypted_key
                     }

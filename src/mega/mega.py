@@ -122,20 +122,11 @@ class Mega:
         password_key = [random.randint(0, 0xFFFFFFFF)] * 4
         session_self_challenge = [random.randint(0, 0xFFFFFFFF)] * 4
 
-        user = self._api_request(
-            {
-                'a':
-                'up',
-                'k':
-                a32_to_base64(encrypt_key(master_key, password_key)),
-                'ts':
-                base64_url_encode(
-                    a32_to_str(session_self_challenge) + a32_to_str(
-                        encrypt_key(session_self_challenge, master_key)
-                    )
-                )
-            }
-        )
+        k = a32_to_base64(encrypt_key(master_key, password_key))
+        ts = a32_to_str(session_self_challenge)
+        ts += a32_to_str(encrypt_key(session_self_challenge, master_key))
+        ts = base64_url_encode(ts)
+        user = self._api_request({'a': 'up', 'k': k, 'ts': ts})
 
         resp = self._api_request({'a': 'us', 'user': user})
         if isinstance(resp, int):
@@ -503,14 +494,13 @@ class Mega:
         """
         Get current remaining disk quota in MegaBytes
         """
-        json_resp = self._api_request(
-            {
-                'a': 'uq',
-                'xfer': 1,
-                'strg': 1,
-                'v': 1
-            }
-        )
+        request = {
+            'a': 'uq',
+            'xfer': 1,
+            'strg': 1,
+            'v': 1
+        }
+        json_resp = self._api_request(request)
         # convert bytes to megabyes
         return json_resp['mstrg'] / 1048576
 
@@ -564,13 +554,12 @@ class Mega:
         """
         Destroy a file by its private id
         """
-        return self._api_request(
-            {
-                'a': 'd',
-                'n': file_id,
-                'i': self.request_id
-            }
-        )
+        request = {
+            'a': 'd',
+            'n': file_id,
+            'i': self.request_id
+        }
+        return self._api_request(request)
 
     def destroy_url(self, url):
         """
@@ -694,21 +683,18 @@ class Mega:
         if file is None:
             if is_public:
                 file_key = base64_to_a32(file_key)
-                file_data = self._api_request(
-                    {
-                        'a': 'g',
-                        'g': 1,
-                        'p': file_handle
-                    }
-                )
+                request = {
+                    'a': 'g',
+                    'g': 1,
+                    'p': file_handle
+                }
             else:
-                file_data = self._api_request(
-                    {
-                        'a': 'g',
-                        'g': 1,
-                        'n': file_handle
-                    }
-                )
+                request = {
+                    'a': 'g',
+                    'g': 1,
+                    'n': file_handle
+                }
+            file_data = self._api_request(request)
 
             k = (
                 file_key[0] ^ file_key[4], file_key[1] ^ file_key[5],
@@ -879,21 +865,20 @@ class Mega:
             encrypted_key = a32_to_base64(encrypt_key(key, self.master_key))
             logger.info('Sending request to update attributes')
             # update attributes
-            data = self._api_request(
-                {
-                    'a': 'p',
-                    't': dest,
-                    'i': self.request_id,
-                    'n': [
-                        {
-                            'h': completion_file_handle,
-                            't': NODE_TYPE_FILE,
-                            'a': encrypt_attribs,
-                            'k': encrypted_key
-                        }
-                    ]
-                }
-            )
+            request = {
+                'a': 'p',
+                't': dest,
+                'i': self.request_id,
+                'n': [
+                    {
+                        'h': completion_file_handle,
+                        't': NODE_TYPE_FILE,
+                        'a': encrypt_attribs,
+                        'k': encrypted_key
+                    }
+                ]
+            }
+            data = self._api_request(request)
             logger.info('Upload complete')
             return data
 
@@ -907,21 +892,20 @@ class Mega:
         encrypted_key = a32_to_base64(encrypt_key(ul_key[:4], self.master_key))
 
         # update attributes
-        data = self._api_request(
-            {
-                'a': 'p',
-                't': parent_node_id,
-                'n': [
-                    {
-                        'h': 'xxxxxxxx',
-                        't': NODE_TYPE_DIR,
-                        'a': encrypt_attribs,
-                        'k': encrypted_key
-                    }
-                ],
-                'i': self.request_id
-            }
-        )
+        request = {
+            'a': 'p',
+            't': parent_node_id,
+            'n': [
+                {
+                    'h': 'xxxxxxxx',
+                    't': NODE_TYPE_DIR,
+                    'a': encrypt_attribs,
+                    'k': encrypted_key
+                }
+            ],
+            'i': self.request_id
+        }
+        data = self._api_request(request)
         return data
 
     def _root_node_id(self):
@@ -961,17 +945,14 @@ class Mega:
             encrypt_key(file['key'], self.master_key)
         )
         # update attributes
-        return self._api_request(
-            [
-                {
-                    'a': 'a',
-                    'attr': encrypt_attribs,
-                    'key': encrypted_key,
-                    'n': file['h'],
-                    'i': self.request_id
-                }
-            ]
-        )
+        request = {
+            'a': 'a',
+            'attr': encrypt_attribs,
+            'key': encrypted_key,
+            'n': file['h'],
+            'i': self.request_id
+        }
+        return self._api_request(request)
 
     def move(self, file_id, target):
         """
@@ -990,14 +971,13 @@ class Mega:
         else:
             file = target[1]
             target_node_id = file['h']
-        return self._api_request(
-            {
-                'a': 'm',
-                'n': file_id,
-                't': target_node_id,
-                'i': self.request_id
-            }
-        )
+        request = {
+            'a': 'm',
+            'n': file_id,
+            't': target_node_id,
+            'i': self.request_id
+        }
+        return self._api_request(request)
 
     def add_contact(self, email):
         """
@@ -1025,14 +1005,13 @@ class Mega:
         if not re.match(r"[^@]+@[^@]+\.[^@]+", email):
             ValidationError('add_contact requires a valid email address')
         else:
-            return self._api_request(
-                {
-                    'a': 'ur',
-                    'u': email,
-                    'l': l,
-                    'i': self.request_id
-                }
-            )
+            request = {
+                'a': 'ur',
+                'u': email,
+                'l': l,
+                'i': self.request_id
+            }
+            return self._api_request(request)
 
     def get_public_url_info(self, url):
         """
@@ -1095,17 +1074,16 @@ class Mega:
 
         encrypted_key = a32_to_base64(encrypt_key(key, self.master_key))
         encrypted_name = base64_url_encode(encrypt_attr({'n': dest_name}, k))
-        return self._api_request(
-            {
-                'a': 'p',
-                't': dest_node['h'],
-                'n': [
-                    {
-                        'ph': file_handle,
-                        't': NODE_TYPE_FILE,
-                        'a': encrypted_name,
-                        'k': encrypted_key
-                    }
-                ]
-            }
-        )
+        request = {
+            'a': 'p',
+            't': dest_node['h'],
+            'n': [
+                {
+                    'ph': file_handle,
+                    't': NODE_TYPE_FILE,
+                    'a': encrypted_name,
+                    'k': encrypted_key
+                }
+            ]
+        }
+        return self._api_request(request)

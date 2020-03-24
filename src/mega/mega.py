@@ -80,6 +80,24 @@ class Mega:
             raise error_for_code(json_resp)
         return json_resp[0]
 
+    def _api_start_session(self, user, user_hash=None):
+        """
+        The `us` request returns a dictionary like
+        {
+            'tsid': 'session' (if temporary session),
+            'csid': 'session' (if login session),
+            'privk': 'private key' (which must be decoded),
+            'k': 'master key' (which must be decoded),
+            'u': 'user id',
+            'ach': 1 (I don't know, it's always 1 for me)
+        }
+        """
+        request = {'a': 'us', 'user': user}
+        if user_hash is not None:
+            request['uh'] = user_hash
+        resp = self._api_request(request)
+        return resp
+
     def login(self, email=None, password=None):
         if email:
             self._login_user(email, password)
@@ -111,7 +129,7 @@ class Mega:
             )
             password_aes = str_to_a32(pbkdf2_key[:16])
             user_hash = base64_url_encode(pbkdf2_key[-16:])
-        resp = self._api_request({'a': 'us', 'user': email, 'uh': user_hash})
+        resp = self._api_start_session(email, user_hash)
         if isinstance(resp, int):
             raise RequestError(resp)
         self._login_process(resp, password_aes)
@@ -128,7 +146,7 @@ class Mega:
         ts = base64_url_encode(ts)
         user = self._api_request({'a': 'up', 'k': k, 'ts': ts})
 
-        resp = self._api_request({'a': 'us', 'user': user})
+        resp = self._api_start_session(user)
         if isinstance(resp, int):
             raise RequestError(resp)
         self._login_process(resp, password_key)

@@ -464,9 +464,9 @@ class Mega:
         if type(target) == int:
             if target in [NODE_TYPE_FILE, NODE_TYPE_DIR]:
                 raise TypeError('Can\'t use file or dir node type.')
-            node_id = self.get_node_by_type(target)
+            node_id = self.get_node_by_type(target)[0]
         else:
-            node_id = [target]
+            node_id = target
 
         files = self._api_request({'a': 'f', 'c': 1})
         # MERGE COMMON CODE WITH GET_FILES
@@ -475,7 +475,7 @@ class Mega:
         self._init_shared_keys(files, shared_keys)
         for file in files['f']:
             processed_file = self._process_file(file, shared_keys)
-            if processed_file['a'] and processed_file['p'] == node_id[0]:
+            if processed_file['a'] and processed_file['p'] == node_id:
                 files_dict[file['h']] = processed_file
         return files_dict
 

@@ -3,7 +3,7 @@ import re
 import json
 import logging
 import secrets
-from pathlib import Path
+import pathlib
 import hashlib
 from Crypto.Cipher import AES
 from Crypto.PublicKey import RSA
@@ -350,7 +350,7 @@ class Mega:
         files = self.get_files()
         if handle:
             return files[handle]
-        path = Path(filename)
+        path = pathlib.Path(filename)
         filename = path.name
         parent_dir_name = path.parent.name
         for file in list(files.items()):
@@ -801,7 +801,7 @@ class Mega:
                 file_mac[0] ^ file_mac[1], file_mac[2] ^ file_mac[3]
             ) != meta_mac:
                 raise ValueError('Mismatched mac')
-            output_path = Path(dest_path + file_name)
+            output_path = pathlib.Path(dest_path + file_name)
             shutil.move(temp_output_file.name, output_path)
             return output_path
 

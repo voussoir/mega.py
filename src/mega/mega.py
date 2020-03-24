@@ -80,6 +80,20 @@ class Mega:
             raise error_for_code(json_resp)
         return json_resp[0]
 
+    def _api_account_version_and_salt(self, email):
+        """
+        The `us0` request returns a dictionary like
+        {'v': 1} if the account is a v1 account, or
+        {'v': 2, 's': '*salt*'} if the account is v2 or higher.
+
+        This function will return a tuple (version, salt) where salt is None
+        if the version is 1.
+        """
+        resp = self._api_request({'a': 'us0', 'user': email})
+        account_version = resp['v']
+        user_salt = resp.get('s', None)
+        return (account_version, user_salt)
+
     def _api_start_session(self, user, user_hash=None):
         """
         The `us` request returns a dictionary like
@@ -110,16 +124,12 @@ class Mega:
     def _login_user(self, email, password):
         logger.info('Logging in user...')
         email = email.lower()
-        get_user_salt_resp = self._api_request({'a': 'us0', 'user': email})
-        user_salt = None
-        try:
-            user_salt = base64_to_a32(get_user_salt_resp['s'])
-        except KeyError:
-            # v1 user account
-            password_aes = prepare_key(str_to_a32(password))
-            user_hash = stringhash(email, password_aes)
-        else:
-            # v2 user account
+        (account_version, user_salt) = self._api_account_version_and_salt(email)
+        logger.debug('User account is version %d.', account_version)
+        if account_version >= 2:
+            user_salt = base64_to_a32(user_salt)
+            # Parameters specified by MEGA's webclient security.js, search for
+            # "numOfIterations" and deriveKeyWithWebCrypto to cross-reference.
             pbkdf2_key = hashlib.pbkdf2_hmac(
                 hash_name='sha512',
                 password=password.encode(),
@@ -129,6 +139,11 @@ class Mega:
             )
             password_aes = str_to_a32(pbkdf2_key[:16])
             user_hash = base64_url_encode(pbkdf2_key[-16:])
+        else:
+            password_a32 = str_to_a32(password)
+            password_aes = prepare_key(password_a32)
+            user_hash = stringhash(email, password_aes)
+
         resp = self._api_start_session(email, user_hash)
         if isinstance(resp, int):
             raise RequestError(resp)

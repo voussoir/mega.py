@@ -43,6 +43,7 @@ class Mega:
         self.sequence_num = random.randint(0, 0xFFFFFFFF)
         self.request_id = make_id(10)
         self._trash_folder_node_id = None
+        self.shared_keys = {}
 
         if options is None:
             options = {}
@@ -235,7 +236,7 @@ class Mega:
         (public_handle, decryption_key) = match[0]
         return (public_handle, decryption_key)
 
-    def _process_file(self, file, shared_keys):
+    def _process_file(self, file):
         if file['t'] in [NODE_TYPE_FILE, NODE_TYPE_DIR]:
             keys = dict(
                 keypart.split(':', 1)
@@ -253,19 +254,19 @@ class Mega:
                     base64_to_a32(file['sk']), self.master_key
                 )
                 key = decrypt_key(base64_to_a32(keys[file['h']]), shared_key)
-                if file['su'] not in shared_keys:
-                    shared_keys[file['su']] = {}
-                shared_keys[file['su']][file['h']] = shared_key
+                if file['su'] not in self.shared_keys:
+                    self.shared_keys[file['su']] = {}
+                self.shared_keys[file['su']][file['h']] = shared_key
             # shared files
-            elif file['u'] and file['u'] in shared_keys:
-                for hkey in shared_keys[file['u']]:
-                    shared_key = shared_keys[file['u']][hkey]
+            elif file['u'] and file['u'] in self.shared_keys:
+                for hkey in self.shared_keys[file['u']]:
+                    shared_key = self.shared_keys[file['u']][hkey]
                     if hkey in keys:
                         key = keys[hkey]
                         key = decrypt_key(base64_to_a32(key), shared_key)
                         break
-            if file['h'] and file['h'] in shared_keys.get('EXP', ()):
-                shared_key = shared_keys['EXP'][file['h']]
+            if file['h'] and file['h'] in self.shared_keys.get('EXP', ()):
+                shared_key = self.shared_keys['EXP'][file['h']]
                 encrypted_key = str_to_a32(
                     base64_url_decode(file['k'].split(':')[-1])
                 )
@@ -300,7 +301,7 @@ class Mega:
             file['a'] = {'n': 'Rubbish Bin'}
         return file
 
-    def _init_shared_keys(self, files, shared_keys):
+    def _init_shared_keys(self, files):
         """
         Init shared key not associated with a user.
         Seems to happen when a folder is shared,
@@ -315,11 +316,10 @@ class Mega:
             )
             ok_dict[ok_item['h']] = shared_key
         for s_item in files['s']:
-            if s_item['u'] not in shared_keys:
-                shared_keys[s_item['u']] = {}
+            if s_item['u'] not in self.shared_keys:
+                self.shared_keys[s_item['u']] = {}
             if s_item['h'] in ok_dict:
-                shared_keys[s_item['u']][s_item['h']] = ok_dict[s_item['h']]
-        self.shared_keys = shared_keys
+                self.shared_keys[s_item['u']][s_item['h']] = ok_dict[s_item['h']]
 
     def find_path_descriptor(self, path, files=()):
         """
@@ -393,10 +393,9 @@ class Mega:
         logger.info('Getting all files...')
         files = self._api_request({'a': 'f', 'c': 1, 'r': 1})
         files_dict = {}
-        shared_keys = {}
-        self._init_shared_keys(files, shared_keys)
+        self._init_shared_keys(files)
         for file in files['f']:
-            processed_file = self._process_file(file, shared_keys)
+            processed_file = self._process_file(file)
             # ensure each file has a name before returning
             if processed_file['a']:
                 files_dict[file['h']] = processed_file
@@ -504,8 +503,7 @@ class Mega:
         files = self._api_request({'a': 'f', 'c': 1})
         # MERGE COMMON CODE WITH GET_FILES
         files_dict = {}
-        shared_keys = {}
-        self._init_shared_keys(files, shared_keys)
+        self._init_shared_keys(files)
         for file in files['f']:
             processed_file = self._process_file(file, shared_keys)
             if processed_file['a'] and processed_file['p'] == node_id:

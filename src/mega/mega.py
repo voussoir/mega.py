@@ -16,7 +16,6 @@ from Crypto.Cipher import AES
 from Crypto.PublicKey import RSA
 from Crypto.Util import Counter
 
-
 from . import crypto
 from . import errors
 
@@ -223,20 +222,25 @@ class Mega:
         (fileid, filekey).
         """
         # File urls are '#!', Folder urls are '#F!'
-        match = re.findall(r'/#F?!(.*)!(.*)', url)
-        if not match:
-            raise errors.ValidationError('Invalid public url. Should have /#!id!key')
-
-        (public_handle, decryption_key) = match[0]
-        return (public_handle, decryption_key)
+        if '/file/' in url:
+            # V2 URL structure
+            url = url.replace(' ', '')
+            file_id = re.findall(r'\W\w\w\w\w\w\w\w\w\W', url)[0][1:-1]
+            id_index = re.search(file_id, url).end()
+            key = url[id_index + 1:]
+            return f'{file_id}!{key}'
+        elif '!' in url:
+            match = re.findall(r'/#F?!(.*)!(.*)', url)
+            if not match:
+                raise errors.ValidationError('Invalid public url. Should have /#!id!key')
+            (public_handle, decryption_key) = match[0]
+            return (public_handle, decryption_key)
 
     def _process_file(self, file):
         if file['t'] in [NODE_TYPE_FILE, NODE_TYPE_DIR]:
             keys = dict(
-                keypart.split(':', 1)
-                for keypart in file['k'].split('/')
-                if ':' in keypart
-            )
+                keypart.split(':', 1) for keypart in file['k'].split('/')
+                if ':' in keypart)
             uid = file['u']
             key = None
             # my objects
@@ -329,11 +333,8 @@ class Mega:
         for foldername in paths:
             if foldername != '':
                 for file in files.items():
-                    if (
-                        file[1]['a'] and
-                        file[1]['t'] and
-                        file[1]['a']['n'] == foldername
-                    ):
+                    if (file[1]['a'] and file[1]['t']
+                            and file[1]['a']['n'] == foldername):
                         if parent_desc == file[1]['p']:
                             parent_desc = file[0]
                             found = True
@@ -355,31 +356,25 @@ class Mega:
         parent_dir_name = path.parent.name
         for file in list(files.items()):
             parent_node_id = None
-            if parent_dir_name:
-                parent_node_id = self.find_path_descriptor(
-                    parent_dir_name, files=files
-                )
-                if (
-                    filename and parent_node_id and
-                    file[1]['a'] and file[1]['a']['n'] == filename and
-                    parent_node_id == file[1]['p']
-                ):
-                    if (
-                        exclude_deleted and
-                        self._trash_folder_node_id == file[1]['p']
-                    ):
+            try:
+                if parent_dir_name:
+                    parent_node_id = self.find_path_descriptor(parent_dir_name,
+                                                               files=files)
+                    if (filename and parent_node_id and file[1]['a']
+                            and file[1]['a']['n'] == filename
+                            and parent_node_id == file[1]['p']):
+                        if (exclude_deleted and self._trash_folder_node_id
+                                == file[1]['p']):
+                            continue
+                        return file
+                elif (filename and file[1]['a']
+                      and file[1]['a']['n'] == filename):
+                    if (exclude_deleted
+                            and self._trash_folder_node_id == file[1]['p']):
                         continue
                     return file
-            if (
-                filename and
-                file[1]['a'] and file[1]['a']['n'] == filename
-            ):
-                if (
-                    exclude_deleted and
-                    self._trash_folder_node_id == file[1]['p']
-                ):
-                    continue
-                return file
+            except TypeError:
+                continue
 
     def get_files(self, public_folder_handle=None):
         logger.info('Getting all files...')
@@ -416,10 +411,8 @@ class Mega:
                 f'/#!{public_handle}!{decrypted_key}'
             )
         else:
-            raise ValueError(
-                '''Upload() response required as input,
-                            use get_link() for regular file input'''
-            )
+            raise ValueError('''Upload() response required as input,
+                            use get_link() for regular file input''')
 
     def get_link(self, file):
         """
@@ -617,24 +610,20 @@ class Mega:
         """
         Download a file by it's file object
         """
-        return self._download_file(
-            file_handle=None,
-            file_key=None,
-            file=file[1],
-            dest_path=dest_path,
-            dest_filename=dest_filename,
-            is_public=False
-        )
+        return self._download_file(file_handle=None,
+                                   file_key=None,
+                                   file=file[1],
+                                   dest_path=dest_path,
+                                   dest_filename=dest_filename,
+                                   is_public=False)
 
     def _export_file(self, node):
         node_data = self._node_data(node)
-        self._api_request([
-            {
-                'a': 'l',
-                'n': node_data['h'],
-                'i': self.request_id
-            }
-        ])
+        self._api_request([{
+            'a': 'l',
+            'n': node_data['h'],
+            'i': self.request_id
+        }])
         return self.get_link(node)
 
     def export(self, path=None, node_id=None):
@@ -670,20 +659,23 @@ class Mega:
         )
 
         node_id = node_data['h']
-        request_body = [
-            {
-                'a': 's2',
-                'n': node_id,
-                's': [{
-                    'u': 'EXP',
-                    'r': 0
-                }],
-                'i': self.request_id,
-                'ok': ok,
-                'ha': ha,
-                'cr': [[node_id], [node_id], [0, 0, encrypted_node_key]]
-            }
-        ]
+        request_body = [{
+            'a':
+            's2',
+            'n':
+            node_id,
+            's': [{
+                'u': 'EXP',
+                'r': 0
+            }],
+            'i':
+            self.request_id,
+            'ok':
+            ok,
+            'ha':
+            ha,
+            'cr': [[node_id], [node_id], [0, 0, encrypted_node_key]]
+        }]
         self._api_request(request_body)
         nodes = self.get_files()
         return self.get_folder_link(nodes[node_id])
@@ -701,15 +693,13 @@ class Mega:
             is_public=True,
         )
 
-    def _download_file(
-        self,
-        file_handle,
-        file_key,
-        dest_path=None,
-        dest_filename=None,
-        is_public=False,
-        file=None
-    ):
+    def _download_file(self,
+                       file_handle,
+                       file_key,
+                       dest_path=None,
+                       dest_filename=None,
+                       is_public=False,
+                       file=None):
         if file is None:
             if is_public:
                 file_key = crypto.base64_to_a32(file_key)
@@ -725,7 +715,6 @@ class Mega:
                     'n': file_handle
                 }
             file_data = self._api_request(request)
-
             k = crypto.interleave_xor_8(file_key)
             iv = file_key[4:6] + (0, 0)
             meta_mac = file_key[6:8]
@@ -757,15 +746,15 @@ class Mega:
         else:
             dest_path += '/'
 
-        with tempfile.NamedTemporaryFile(
+        temp_output_file = tempfile.NamedTemporaryFile(
             mode='w+b', prefix='megapy_', delete=False
-        ) as temp_output_file:
+        )
+        with temp_output_file:
             k_str = crypto.a32_to_str(k)
             counter = Counter.new(
                 128, initial_value=((iv[0] << 32) + iv[1]) << 64
             )
             aes = AES.new(k_str, AES.MODE_CTR, counter=counter)
-
             mac_str = '\0' * 16
             mac_encryptor = AES.new(k_str, AES.MODE_CBC, mac_str.encode("utf8"))
             iv_str = crypto.a32_to_str([iv[0], iv[1], iv[0], iv[1]])
@@ -797,9 +786,8 @@ class Mega:
                 )
             file_mac = crypto.str_to_a32(mac_str)
             # check mac integrity
-            if (
-                file_mac[0] ^ file_mac[1], file_mac[2] ^ file_mac[3]
-            ) != meta_mac:
+            if (file_mac[0] ^ file_mac[1],
+                    file_mac[2] ^ file_mac[3]) != meta_mac:
                 raise ValueError('Mismatched mac')
             output_path = pathlib.Path(dest_path + file_name)
             shutil.move(temp_output_file.name, output_path)
@@ -822,8 +810,7 @@ class Mega:
             ul_key = [random.randint(0, 0xFFFFFFFF) for _ in range(6)]
             k_str = crypto.a32_to_str(ul_key[:4])
             count = Counter.new(
-                128, initial_value=((ul_key[4] << 32) + ul_key[5]) << 64
-            )
+                128, initial_value=((ul_key[4] << 32) + ul_key[5]) << 64)
             aes = AES.new(k_str, AES.MODE_CTR, counter=count)
 
             upload_progress = 0
@@ -855,19 +842,17 @@ class Mega:
 
                     # encrypt file and upload
                     chunk = aes.encrypt(chunk)
-                    output_file = requests.post(
-                        ul_url + "/" + str(chunk_start),
-                        data=chunk,
-                        timeout=self.timeout
-                    )
+                    output_file = requests.post(ul_url + "/" +
+                                                str(chunk_start),
+                                                data=chunk,
+                                                timeout=self.timeout)
                     completion_file_handle = output_file.text
-                    logger.info(
-                        '%s of %s uploaded', upload_progress, file_size
-                    )
+                    logger.info('%s of %s uploaded', upload_progress,
+                                file_size)
             else:
-                output_file = requests.post(
-                    ul_url + "/0", data='', timeout=self.timeout
-                )
+                output_file = requests.post(ul_url + "/0",
+                                            data='',
+                                            timeout=self.timeout)
                 completion_file_handle = output_file.text
 
             logger.info('Chunks uploaded')
@@ -955,9 +940,8 @@ class Mega:
                     parent_node_id = dest
             else:
                 parent_node_id = folder_node_ids[idx - 1]
-            created_node = self._mkdir(
-                name=directory_name, parent_node_id=parent_node_id
-            )
+            created_node = self._mkdir(name=directory_name,
+                                       parent_node_id=parent_node_id)
             node_id = created_node['f'][0]['h']
             folder_node_ids[idx] = node_id
         return dict(zip(dirs, folder_node_ids.values()))
@@ -1185,9 +1169,11 @@ class Mega:
         result = {'size': size, 'name': unencrypted_attrs['n']}
         return result
 
-    def import_public_file(
-        self, file_handle, file_key, dest_node=None, dest_name=None
-    ):
+    def import_public_file(self,
+                           file_handle,
+                           file_key,
+                           dest_node=None,
+                           dest_name=None):
         """
         Import the public file into user account
         """
@@ -1202,7 +1188,6 @@ class Mega:
 
         key = crypto.base64_to_a32(file_key)
         k = crypto.interleave_xor_8(key)
-
         encrypted_key = crypto.a32_to_base64(crypto.encrypt_key(key, self.master_key))
         encrypted_name = crypto.base64_url_encode(crypto.encrypt_attr({'n': dest_name}, k))
         request = {

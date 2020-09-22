@@ -23,29 +23,24 @@ else:
     def makestring(x):
         return codecs.latin_1_decode(x)[0]
 
-
 def aes_cbc_encrypt(data, key):
     aes_cipher = AES.new(key, AES.MODE_CBC, makebyte('\0' * 16))
     return aes_cipher.encrypt(data)
-
 
 def aes_cbc_decrypt(data, key):
     aes_cipher = AES.new(key, AES.MODE_CBC, makebyte('\0' * 16))
     return aes_cipher.decrypt(data)
 
-
 def aes_cbc_encrypt_a32(data, key):
     return str_to_a32(aes_cbc_encrypt(a32_to_str(data), a32_to_str(key)))
-
 
 def aes_cbc_decrypt_a32(data, key):
     return str_to_a32(aes_cbc_decrypt(a32_to_str(data), a32_to_str(key)))
 
-
 def stringhash(str, aeskey):
-    """
+    '''
     As defined by MEGA's weblient crypto.js. Search for "function stringhash".
-    """
+    '''
     s32 = str_to_a32(str)
     h32 = [0, 0, 0, 0]
     for (index, word) in enumerate(s32):
@@ -53,7 +48,6 @@ def stringhash(str, aeskey):
     for r in range(0x4000):
         h32 = aes_cbc_encrypt_a32(h32, aeskey)
     return a32_to_base64((h32[0], h32[2]))
-
 
 def prepare_key(arr):
     pkey = [0x93C467E3, 0x7DB0C7A4, 0xD1BE3F81, 0x0152CB56]
@@ -65,7 +59,6 @@ def prepare_key(arr):
                     key[i] = arr[i + j]
             pkey = aes_cbc_encrypt_a32(pkey, key)
     return pkey
-
 
 def encrypt_key(a, key):
     encrypted = tuple(
@@ -83,13 +76,11 @@ def decrypt_key(a, key):
     )
     return decrypted
 
-
 def encrypt_attr(attr, key):
     attr = makebyte('MEGA' + json.dumps(attr))
     if len(attr) % 16:
         attr += b'\0' * (16 - len(attr) % 16)
     return aes_cbc_encrypt(attr, a32_to_str(key))
-
 
 def decrypt_attr(attr, key):
     attr = aes_cbc_decrypt(attr, a32_to_str(key))
@@ -97,10 +88,8 @@ def decrypt_attr(attr, key):
     attr = attr.rstrip('\0')
     return json.loads(attr[4:]) if attr[:6] == 'MEGA{"' else False
 
-
 def a32_to_str(a):
     return struct.pack('>%dI' % len(a), *a)
-
 
 def str_to_a32(b):
     if isinstance(b, str):
@@ -109,7 +98,6 @@ def str_to_a32(b):
         # pad to multiple of 4
         b += b'\0' * (4 - len(b) % 4)
     return struct.unpack('>%dI' % (len(b) / 4), b)
-
 
 def mpi_to_int(s):
     '''
@@ -127,10 +115,6 @@ def extended_gcd(a, b):
         return (g, x - (b // a) * y, y)
 
 def modular_inverse(a, m):
-    '''
-    Thank you Mart Bakhoff for this solution.
-    https://stackoverflow.com/a/9758173
-    '''
     g, x, y = extended_gcd(a, m)
     if g != 1:
         raise Exception('modular inverse does not exist')
@@ -141,15 +125,13 @@ def interleave_xor_8(b):
     return (b[0] ^ b[4], b[1] ^ b[5], b[2] ^ b[6], b[3] ^ b[7])
 
 def base64_url_decode(data):
-    data += '==' [(2 - len(data) * 3) % 4:]
+    data += '=='[(2 - len(data) * 3) % 4:]
     for search, replace in (('-', '+'), ('_', '/'), (',', '')):
         data = data.replace(search, replace)
     return base64.b64decode(data)
 
-
 def base64_to_a32(s):
     return str_to_a32(base64_url_decode(s))
-
 
 def base64_url_encode(data):
     data = base64.b64encode(data)
@@ -158,16 +140,14 @@ def base64_url_encode(data):
         data = data.replace(search, replace)
     return data
 
-
 def a32_to_base64(a):
     return base64_url_encode(a32_to_str(a))
 
-
 def get_chunks(size):
-    """
+    '''
     Given the size of a file in bytes, return tuples (chunk_start, chunk_size)
     for the purposes of downloading or uploading a file in chunks.
-    """
+    '''
     chunk_start = 0
     chunk_size = 0x20000
     while chunk_start + chunk_size < size:
@@ -177,7 +157,6 @@ def get_chunks(size):
         if chunk_size < 0x100000:
             chunk_size += 0x20000
     yield (chunk_start, size - chunk_start)
-
 
 def make_id(length):
     possible = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789"

@@ -4,7 +4,6 @@ class ValidationError(Exception):
     """
     pass
 
-
 class RequestError(Exception):
     """
     Error in API request
@@ -17,7 +16,6 @@ class RequestError(Exception):
 
     def __str__(self):
         return self.message
-
 
 class EINTERNAL(RequestError):
     code = -1
@@ -151,7 +149,6 @@ _CODE_TO_CLASSES = {
     -21: EREAD,
     -22: EAPPKEY,
 }
-
 
 def error_for_code(code):
     cls = _CODE_TO_CLASSES[code]

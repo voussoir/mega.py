@@ -437,11 +437,11 @@ class Mega:
                 "Can't get a public link from that file "
                 "(is this a shared file?)"
             )
-        urls = []
+        urls = {}
         for (file, public_handle) in zip(files, public_handles):
             decrypted_key = crypto.a32_to_base64(file['key'])
             url = f'{self.schema}://{self.domain}/#!{public_handle}!{decrypted_key}'
-            urls.append(url)
+            urls[file['h']] = url
         return urls
 
     def _node_data(self, node):
@@ -646,9 +646,9 @@ class Mega:
             node = self.find(path)
 
         node_data = self._node_data(node)
-        is_file_node = node_data['t'] == NODE_TYPE_FILE
-        if is_file_node:
+        if node_data['t'] == NODE_TYPE_FILE:
             return self.export_files(node)
+
         if node:
             try:
                 # If already exported

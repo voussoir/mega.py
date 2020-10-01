@@ -72,7 +72,10 @@ class Mega:
         if isinstance(json_resp, int):
             # If this raises EAGAIN it'll be caught by tenacity retry.
             raise errors.error_for_code(json_resp)
-        return json_resp[0]
+        if len(json_resp) == 1:
+            return json_resp[0]
+        else:
+            return json_resp
 
     def _api_account_version_and_salt(self, email):
         """

@@ -427,22 +427,22 @@ class Mega:
 
         files = [self._node_data(file) for file in files]
 
-        if all('h' in file and 'k' in file for file in files):
-            request = [{'a': 'l', 'n': file['h']} for file in files]
-            public_handles = self._api_request(request)
-            if public_handles == -11:
-                raise errors.RequestError(
-                    "Can't get a public link from that file "
-                    "(is this a shared file?)"
-                )
-            urls = []
-            for (file, public_handle) in zip(files, public_handles):
-                decrypted_key = crypto.a32_to_base64(file['key'])
-                url = f'{self.schema}://{self.domain}/#!{public_handle}!{decrypted_key}'
-                urls.append(url)
-            return urls
-        else:
+        if not all('h' in file and 'k' in file for file in files):
             raise errors.ValidationError('File id and key must be present')
+
+        request = [{'a': 'l', 'n': file['h']} for file in files]
+        public_handles = self._api_request(request)
+        if public_handles == -11:
+            raise errors.RequestError(
+                "Can't get a public link from that file "
+                "(is this a shared file?)"
+            )
+        urls = []
+        for (file, public_handle) in zip(files, public_handles):
+            decrypted_key = crypto.a32_to_base64(file['key'])
+            url = f'{self.schema}://{self.domain}/#!{public_handle}!{decrypted_key}'
+            urls.append(url)
+        return urls
 
     def _node_data(self, node):
         if isinstance(node, dict):

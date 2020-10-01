@@ -86,6 +86,8 @@ def decrypt_attr(attr, key):
     attr = aes_cbc_decrypt(attr, a32_to_str(key))
     attr = makestring(attr)
     attr = attr.rstrip('\0')
+    if '"}\0' in attr:
+        attr = attr.split('"}\0')[0] + '"}'
     return json.loads(attr[4:]) if attr[:6] == 'MEGA{"' else False
 
 def a32_to_str(a):

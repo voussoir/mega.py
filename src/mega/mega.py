@@ -416,29 +416,37 @@ class Mega:
             )
         else:
             raise ValueError('''Upload() response required as input,
-                            use get_link() for regular file input''')
+                            use get_links() for regular file input''')
 
-    def get_link(self, file):
+    def get_links(self, files):
         """
-        Get a file public link from given file object
+        Get a file public links from given file objects.
         """
-        file = file[1]
-        if 'h' in file and 'k' in file:
-            public_handle = self._api_request({'a': 'l', 'n': file['h']})
-            if public_handle == -11:
+        if not isinstance(files, list):
+            files = [files]
+
+        files = [self._node_data(file) for file in files]
+
+        if all('h' in file and 'k' in file for file in files):
+            request = [{'a': 'l', 'n': file['h']} for file in files]
+            public_handles = self._api_request(request)
+            if public_handles == -11:
                 raise errors.RequestError(
                     "Can't get a public link from that file "
                     "(is this a shared file?)"
                 )
-            decrypted_key = crypto.a32_to_base64(file['key'])
-            return (
-                f'{self.schema}://{self.domain}'
-                f'/#!{public_handle}!{decrypted_key}'
-            )
+            urls = []
+            for (file, public_handle) in zip(files, public_handles):
+                decrypted_key = crypto.a32_to_base64(file['key'])
+                url = f'{self.schema}://{self.domain}/#!{public_handle}!{decrypted_key}'
+                urls.append(url)
+            return urls
         else:
             raise errors.ValidationError('File id and key must be present')
 
     def _node_data(self, node):
+        if isinstance(node, dict):
+            return node
         try:
             return node[1]
         except (IndexError, KeyError):
@@ -621,14 +629,14 @@ class Mega:
                                    dest_filename=dest_filename,
                                    is_public=False)
 
-    def _export_file(self, node):
-        node_data = self._node_data(node)
-        self._api_request([{
-            'a': 'l',
-            'n': node_data['h'],
-            'i': self.request_id
-        }])
-        return self.get_link(node)
+    def export_files(self, nodes):
+        if not isinstance(nodes, list):
+            nodes = [nodes]
+
+        node_datas = [self._node_data(node) for node in nodes]
+        requests = [{'a': 'l', 'n': node_data['h'], 'i': self.request_id} for node_data in node_datas]
+        self._api_request(requests)
+        return self.get_links(nodes)
 
     def export(self, path=None, node_id=None):
         if node_id:
@@ -640,7 +648,7 @@ class Mega:
         node_data = self._node_data(node)
         is_file_node = node_data['t'] == NODE_TYPE_FILE
         if is_file_node:
-            return self._export_file(node)
+            return self.export_files(node)
         if node:
             try:
                 # If already exported

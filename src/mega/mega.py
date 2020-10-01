@@ -395,7 +395,7 @@ class Mega:
             # ensure each file has a name before returning
             if processed_file['a']:
                 files_dict[file['h']] = processed_file
-        self._files = files_dict
+        self._nodes = files_dict
         return files_dict
 
     def get_upload_link(self, file):

@@ -531,7 +531,7 @@ class Mega:
 
     def get_quota(self):
         """
-        Get current remaining disk quota in MegaBytes
+        Get total and remaining disk space.
         """
         request = {
             'a': 'uq',
@@ -540,8 +540,7 @@ class Mega:
             'v': 1
         }
         json_resp = self._api_request(request)
-        # convert bytes to megabyes
-        return json_resp['mstrg'] / 1048576
+        return {'total': json_resp['cstrg'], 'remaining': json_resp['mstrg']}
 
     def get_storage_space(self, giga=False, mega=False, kilo=False):
         """

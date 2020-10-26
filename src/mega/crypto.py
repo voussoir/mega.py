@@ -39,7 +39,7 @@ def aes_cbc_decrypt_a32(data, key):
 
 def stringhash(str, aeskey):
     '''
-    As defined by MEGA's weblient crypto.js. Search for "function stringhash".
+    As defined by MEGA's webclient crypto.js. Search for "function stringhash".
     '''
     s32 = str_to_a32(str)
     h32 = [0, 0, 0, 0]

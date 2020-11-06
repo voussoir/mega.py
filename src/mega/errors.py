@@ -124,6 +124,9 @@ class EAPPKEY(RequestError):
     code = -22
     message = 'Invalid application key; request not processed'
 
+class EPAYWALL(RequestError):
+    code = -29
+    message = 'Over Disk Quota Paywall is blocking this operation'
 
 _CODE_TO_CLASSES = {
     -1: EINTERNAL,
@@ -148,6 +151,7 @@ _CODE_TO_CLASSES = {
     -20: EWRITE,
     -21: EREAD,
     -22: EAPPKEY,
+    -29: EPAYWALL,
 }
 
 def error_for_code(code):

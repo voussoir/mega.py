@@ -35,7 +35,7 @@ class Mega:
         self.sid = None
         self.sequence_num = random.randint(0, 0xFFFFFFFF)
         self.request_id = crypto.make_id(10)
-        self._trash_folder_node_id = None
+        self._cached_trash_folder_node_id = None
         self.shared_keys = {}
         self.requests_session = requests.Session()
 
@@ -110,12 +110,17 @@ class Mega:
         resp = self._api_request(request)
         return resp
 
+    @property
+    def _trash_folder_node_id(self):
+        if self._cached_trash_folder_node_id is None:
+            self._cached_trash_folder_node_id = self.get_node_by_type(NODE_TYPE_TRASH)[0]
+        return self._cached_trash_folder_node_id
+
     def login(self, email=None, password=None):
         if email:
             self._login_user(email, password)
         else:
             self.login_anonymous()
-        self._trash_folder_node_id = self.get_node_by_type(NODE_TYPE_TRASH)[0]
         logger.info('Login complete')
         return self
 

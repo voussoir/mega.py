@@ -588,7 +588,7 @@ class Mega:
         """
         Delete a file by its public handle
         """
-        return self.move(public_handle, NODE_TYPE_TRASH)
+        return self.move(public_handle, self._trash_folder_node_id)
 
     def delete_url(self, url):
         """
@@ -596,7 +596,7 @@ class Mega:
         """
         (public_handle, decryption_key) = self._parse_url(url)
         file_id = self.get_id_from_public_handle(public_handle)
-        return self.move(file_id, NODE_TYPE_TRASH)
+        return self.move(file_id, self._trash_folder_node_id)
 
     def destroy(self, file_id):
         """
@@ -619,7 +619,7 @@ class Mega:
 
     def empty_trash(self):
         # get list of files in rubbish out
-        files = self.get_files_in_node(NODE_TYPE_TRASH)
+        files = self.get_files_in_node(self._trash_folder_node_id)
 
         # make a list of json
         if files != {}:

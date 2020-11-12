@@ -588,11 +588,11 @@ class Mega:
         if 'balance' in user_data:
             return user_data['balance']
 
-    def delete(self, public_handle):
+    def delete(self, file_id):
         """
         Delete a file by its file id.
         """
-        return self.move(public_handle, self._trash_folder_node_id)
+        return self.move(file_id, self._trash_folder_node_id)
 
     def delete_url(self, url):
         """

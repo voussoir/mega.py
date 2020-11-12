@@ -28,7 +28,7 @@ NODE_TYPE_INBOX = 3
 NODE_TYPE_TRASH = 4
 
 class Mega:
-    def __init__(self, options=None):
+    def __init__(self):
         self.schema = 'https'
         self.domain = 'mega.co.nz'
         self.timeout = 160  # max secs to wait for resp from api requests
@@ -38,10 +38,6 @@ class Mega:
         self._cached_trash_folder_node_id = None
         self.shared_keys = {}
         self.requests_session = requests.Session()
-
-        if options is None:
-            options = {}
-        self.options = options
 
     @tenacity.retry(
         retry=tenacity.retry_if_exception_type(errors.EAGAIN),

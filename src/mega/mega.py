@@ -541,7 +541,12 @@ class Mega:
             'v': 1
         }
         json_resp = self._api_request(request)
-        return {'total': json_resp['cstrg'], 'remaining': json_resp['mstrg']}
+        response = {
+            'total': json_resp['mstrg'],
+            'used': json_resp['cstrg'],
+            'remaining': json_resp['mstrg'] - json_resp['cstrg'],
+        }
+        return response
 
     def get_storage_space(self, giga=False, mega=False, kilo=False):
         """

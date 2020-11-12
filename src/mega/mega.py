@@ -37,6 +37,7 @@ class Mega:
         self.request_id = crypto.make_id(10)
         self._trash_folder_node_id = None
         self.shared_keys = {}
+        self.requests_session = requests.Session()
 
         if options is None:
             options = {}
@@ -60,7 +61,7 @@ class Mega:
             data = [data]
 
         url = f'{self.schema}://g.api.{self.domain}/cs'
-        req = requests.post(
+        req = self.requests_session.post(
             url,
             params=req_params,
             data=json.dumps(data),
@@ -750,7 +751,7 @@ class Mega:
         else:
             file_name = attribs['n']
 
-        input_file = requests.get(file_url, stream=True).raw
+        input_file = self.requests_session.get(file_url, stream=True).raw
 
         if dest_path is None:
             dest_path = ''
@@ -853,17 +854,20 @@ class Mega:
 
                     # encrypt file and upload
                     chunk = aes.encrypt(chunk)
-                    output_file = requests.post(ul_url + "/" +
-                                                str(chunk_start),
-                                                data=chunk,
-                                                timeout=self.timeout)
+                    output_file = self.requests_session.post(
+                        ul_url + "/" + str(chunk_start),
+                        data=chunk,
+                        timeout=self.timeout
+                    )
                     completion_file_handle = output_file.text
                     logger.info('%s of %s uploaded', upload_progress,
                                 file_size)
             else:
-                output_file = requests.post(ul_url + "/0",
-                                            data='',
-                                            timeout=self.timeout)
+                output_file = self.requests_session.post(
+                    ul_url + "/0",
+                    data='',
+                    timeout=self.timeout
+                )
                 completion_file_handle = output_file.text
 
             logger.info('Chunks uploaded')

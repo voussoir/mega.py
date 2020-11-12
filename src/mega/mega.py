@@ -535,13 +535,40 @@ class Mega:
                 node_id = i['h']
         return node_id
 
-    def get_quota(self):
+    def get_transfer_quota(self):
         """
-        Get total and remaining disk space.
+        Get transfer quota usage and maximum.
         """
         request = {
             'a': 'uq',
             'xfer': 1,
+            'v': 1
+        }
+        json_resp = self._api_request(request)
+        if json_resp['utype'] == 0:
+            # For free accounts, there is no specified limit and your bandwidth
+            # is  measured in a 6-hour rolling window.
+            response = {
+                'total': None,
+                'used': sum(json_resp['tah']),
+                'remaining': None,
+            }
+        else:
+            # For Pro users, bandwidth limits are clearly defined by the
+            # account  and the response contains simple integers for total, used.
+            response = {
+                'total': json_resp['mxfer'],
+                'used': json_resp['caxfer'],
+                'remaining': json_resp['mxfer'] - json_resp['caxfer'],
+            }
+        return response
+
+    def get_storage_quota(self):
+        """
+        Get disk quota usage and maximum.
+        """
+        request = {
+            'a': 'uq',
             'strg': 1,
             'v': 1
         }
@@ -552,29 +579,6 @@ class Mega:
             'remaining': json_resp['mstrg'] - json_resp['cstrg'],
         }
         return response
-
-    def get_storage_space(self, giga=False, mega=False, kilo=False):
-        """
-        Get the current storage space.
-        Return a dict containing at least:
-          'used' : the used space on the account
-          'total' : the maximum space allowed with current plan
-        All storage space are in bytes unless asked differently.
-        """
-        if sum(bool(x) for x in (kilo, mega, giga)) > 1:
-            raise ValueError("Only one unit prefix can be specified")
-        unit_coef = 1
-        if kilo:
-            unit_coef = 1024
-        if mega:
-            unit_coef = 1048576
-        if giga:
-            unit_coef = 1073741824
-        json_resp = self._api_request({'a': 'uq', 'xfer': 1, 'strg': 1})
-        return {
-            'used': json_resp['cstrg'] / unit_coef,
-            'total': json_resp['mstrg'] / unit_coef,
-        }
 
     def get_balance(self):
         """

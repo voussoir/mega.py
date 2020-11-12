@@ -51,12 +51,14 @@ def stringhash(str, aeskey):
 
 def prepare_key(arr):
     pkey = [0x93C467E3, 0x7DB0C7A4, 0xD1BE3F81, 0x0152CB56]
+    key = [0, 0, 0, 0]
     for r in range(0x10000):
         for j in range(0, len(arr), 4):
-            key = [0, 0, 0, 0]
             for i in range(4):
                 if i + j < len(arr):
                     key[i] = arr[i + j]
+                else:
+                    key[i] = 0
             pkey = aes_cbc_encrypt_a32(pkey, key)
     return pkey
 

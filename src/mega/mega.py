@@ -586,13 +586,13 @@ class Mega:
 
     def delete(self, public_handle):
         """
-        Delete a file by its public handle
+        Delete a file by its file id.
         """
         return self.move(public_handle, self._trash_folder_node_id)
 
     def delete_url(self, url):
         """
-        Delete a file by its url
+        Delete a file by its public url.
         """
         (public_handle, decryption_key) = self._parse_url(url)
         file_id = self.get_id_from_public_handle(public_handle)
@@ -600,7 +600,7 @@ class Mega:
 
     def destroy(self, file_id):
         """
-        Destroy a file by its private id
+        Destroy a file by its file id.
         """
         request = {
             'a': 'd',
@@ -611,7 +611,7 @@ class Mega:
 
     def destroy_url(self, url):
         """
-        Destroy a file by its url
+        Destroy a file by its public url.
         """
         (public_handle, decryption_key) = self._parse_url(url)
         file_id = self.get_id_from_public_handle(public_handle)

@@ -611,6 +611,9 @@ class Mega:
         self._api_request(request)
         request = [self.draft_get_file_link(node) for node in nodes]
         response = self._api_request(request)
+        # When there's only one file
+        if isinstance(response, str) and response.startswith('https://mega'):
+            response = [response]
         url_map = {node['h']: url for (node, url) in zip(nodes, response)}
         return url_map
 

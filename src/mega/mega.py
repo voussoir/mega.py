@@ -867,8 +867,10 @@ class Mega:
         for file in files['f']:
             processed_file = self._process_file(file)
             # ensure each file has a name before returning
-            if processed_file['a']:
+            if isinstance(processed_file['a'], dict):
                 files_dict[file['h']] = processed_file
+            else:
+                logger.warning('%s\'s attributes were not decrypted.', file['h'])
         self._nodes = files_dict
         return files_dict
 

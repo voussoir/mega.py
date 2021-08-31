@@ -46,7 +46,8 @@ class Mega:
         self.requests_session = requests.Session()
 
     @tenacity.retry(
-        retry=tenacity.retry_if_exception_type(errors.EAGAIN),
+        retry=tenacity.retry_if_exception_type((errors.EAGAIN, json.decoder.JSONDecodeError)),
+        stop=tenacity.stop_after_attempt(10),
         wait=tenacity.wait_exponential(multiplier=2, min=2, max=60),
     )
     def _api_request(self, request_data, params={}):

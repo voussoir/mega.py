@@ -1,10 +1,10 @@
-from Crypto.Cipher import AES
-import json
 import base64
-import struct
 import binascii
+import json
 import random
+import struct
 import sys
+from Crypto.Cipher import AES
 
 # Python3 compatibility
 if sys.version_info < (3, ):

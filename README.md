@@ -1,4 +1,4 @@
-This repository is forked from https://code.richard.do/richardARPANET/mega.py
+This repository is forked from https://github.com/odwyersoftware/mega.py / https://code.richard.do/richardARPANET/mega.py
 
 ---
 

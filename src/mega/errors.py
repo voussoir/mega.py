@@ -1,10 +1,13 @@
-class ValidationError(Exception):
+class MegaError(Exception):
+    pass
+
+class ValidationError(MegaError):
     """
     Error in validation stage
     """
     pass
 
-class RequestError(Exception):
+class RequestError(MegaError):
     """
     Error in API request
     """

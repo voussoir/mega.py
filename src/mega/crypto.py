@@ -1,6 +1,7 @@
 import base64
 import binascii
 import json
+import math
 import random
 import struct
 import sys
@@ -109,7 +110,16 @@ def mpi_to_int(s):
     order. The first two bytes are a header which tell the number of bits in
     the integer. The rest of the bytes are the integer.
     '''
+    if s == bytes([0, 0]):
+        return 0
     return int(binascii.hexlify(s[2:]), 16)
+
+def int_to_mpi(i):
+    byte_length = math.ceil(math.log(i, 256))
+    bit_length = byte_length * 8
+    header = bit_length.to_bytes(2, 'big')
+    body = i.to_bytes(byte_length, 'big')
+    return header + body
 
 def extended_gcd(a, b):
     if a == 0:
@@ -166,3 +176,6 @@ def make_id(length):
     possible = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789"
     text = ''.join(random.choice(possible) for i in range(length))
     return text
+
+def random_a32(length):
+    return [random.randint(0, 0xFFFFFFFF) for x in range(length)]

@@ -36,9 +36,9 @@ class Mega:
     def __init__(self):
         self.schema = 'https'
         self.domain = 'mega.co.nz'
-        self.timeout = 160  # max secs to wait for resp from api requests
+        self.timeout = 160
         self.sid = None
-        self.sequence_num = random.randint(0, 0xFFFFFFFF)
+        self.sequence_num = crypto.random_a32(length=1)[0]
         self.request_id = crypto.make_id(10)
         self._cached_trash_folder_node_id = None
         self._cached_root_node_id = None
@@ -49,6 +49,7 @@ class Mega:
         retry=tenacity.retry_if_exception_type((errors.EAGAIN, json.decoder.JSONDecodeError)),
         stop=tenacity.stop_after_attempt(10),
         wait=tenacity.wait_exponential(multiplier=2, min=2, max=60),
+        reraise=True,
     )
     def _api_request(self, request_data, params={}):
         request_params = {'id': self.sequence_num}
@@ -64,6 +65,9 @@ class Mega:
             request_data = [request_data]
 
         request_json = [d.request if isinstance(d, RequestDraft) else d for d in request_data]
+
+        logger.debug('API request: %s', request_json)
+
         response = self.requests_session.post(
             url=f'{self.schema}://g.api.{self.domain}/cs',
             params=request_params,
@@ -71,6 +75,8 @@ class Mega:
             timeout=self.timeout,
         )
         responses = json.loads(response.text)
+
+        logger.debug('API response: %s', response.text[:250])
 
         if isinstance(responses, int):
             # If this raises EAGAIN it'll be caught by tenacity retry.
@@ -126,7 +132,7 @@ class Mega:
             self._cached_trash_folder_node_id = self.get_node_by_type(NODE_TYPE_TRASH)[0]
         return self._cached_trash_folder_node_id
 
-    # LOGIN ########################################################################################
+    # LOGIN & REGISTER #############################################################################
 
     def _api_account_version_and_salt(self, email):
         '''
@@ -184,21 +190,29 @@ class Mega:
                 iterations=100000,
                 dklen=32
             )
-            password_aes = crypto.str_to_a32(pbkdf2_key[:16])
+            password_key = crypto.str_to_a32(pbkdf2_key[:16])
             user_hash = crypto.base64_url_encode(pbkdf2_key[-16:])
         else:
             password_a32 = crypto.str_to_a32(password)
-            password_aes = crypto.prepare_key(password_a32)
-            user_hash = crypto.stringhash(email, password_aes)
+            password_key = crypto.prepare_key(password_a32)
+            user_hash = crypto.stringhash(email, password_key)
 
         resp = self._api_start_session(email, user_hash)
-        self._login_process(resp, password_aes)
+        self._login_process(resp, password_key)
 
-    def login_anonymous(self):
+    def login_anonymous(self, password=None):
         logger.info('Logging in anonymous temporary user...')
-        master_key = [random.randint(0, 0xFFFFFFFF)] * 4
-        password_key = [random.randint(0, 0xFFFFFFFF)] * 4
-        session_self_challenge = [random.randint(0, 0xFFFFFFFF)] * 4
+        master_key = crypto.random_a32(length=4)
+
+        # During the registration process, we start an anonymous session that
+        # will become our account. This is why we can choose a password here.
+        if password is None:
+            password_key = crypto.random_a32(length=4)
+        else:
+            password_a32 = crypto.str_to_a32(password)
+            password_key = crypto.prepare_key(password_a32)
+
+        session_self_challenge = crypto.random_a32(length=4)
 
         k = crypto.a32_to_base64(crypto.encrypt_key(master_key, password_key))
         ts = crypto.a32_to_str(session_self_challenge)
@@ -209,9 +223,75 @@ class Mega:
         resp = self._api_start_session(user)
         self._login_process(resp, password_key)
 
-    def _login_process(self, resp, password):
+    def register(self, email, password, name=''):
+        self.login_anonymous(password=password)
+        self._api_request({'a': 'up', 'name': name})
+
+        # Request signup link
+        challenge = tuple(crypto.random_a32(length=4))
+        cdata = self.master_key + challenge
+        request = {
+            'a': 'uc',
+            'c': crypto.a32_to_base64(cdata),
+            'n': crypto.base64_url_encode(name.encode('utf-8')),
+            'm': crypto.base64_url_encode(email.encode('utf-8')),
+        }
+        self._api_request(request)
+        self._registration_challenge = challenge
+
+    def verify_registration(self, confirmation):
+        if not hasattr(self, '_registration_challenge'):
+            message = 'You cannot call verify_registration before calling register.'
+            raise errors.RegistrationError(message)
+
+        confirmation = confirmation.split('/#confirm', 1)[-1]
+
+        request = {
+            'a': 'ud',
+            'c': confirmation,
+        }
+        response = self._api_request(request)
+        (email, name, user_id, encrypted_key, challenge) = response
+
+        email = crypto.base64_url_decode(email).decode('utf-8').lower()
+        challenge = crypto.base64_to_a32(challenge)
+
+        if challenge != self._registration_challenge:
+            message = f'local: {self._registration_challenge}, remote: {challenge}.'
+            raise errors.RegistrationChallengeFailed(message)
+
+        user_hash = crypto.stringhash(email, self._password_key)
+
+        self._api_request({'a': 'up', 'uh': user_hash, 'c': confirmation})
+        response = self._api_start_session(email, user_hash)
+        self._login_process(response, self._password_key)
+
+        private = RSA.generate(2048)
+        public = private.publickey()
+
+        pubk = crypto.base64_url_encode(crypto.int_to_mpi(public.n) + crypto.int_to_mpi(public.e))
+        privk = b''.join([
+            crypto.int_to_mpi(private.p),
+            crypto.int_to_mpi(private.q),
+            crypto.int_to_mpi(private.d),
+            crypto.int_to_mpi(private.u),
+        ])
+        padding = (len(privk) % 16) % 16
+        privk += b'\x00' * padding
+        privk = crypto.str_to_a32(privk)
+        privk = crypto.encrypt_key(privk, self.master_key)
+        privk = crypto.a32_to_base64(privk)
+        request = {
+            'a': 'up',
+            'pubk': pubk,
+            'privk': privk,
+        }
+        self._api_request(request)
+
+    def _login_process(self, resp, password_key):
         encrypted_master_key = crypto.base64_to_a32(resp['k'])
-        self.master_key = crypto.decrypt_key(encrypted_master_key, password)
+        self._password_key = password_key
+        self.master_key = crypto.decrypt_key(encrypted_master_key, password_key)
         # tsid is for temporary sessions
         if 'tsid' in resp:
             tsid = crypto.base64_url_decode(resp['tsid'])
@@ -233,12 +313,12 @@ class Mega:
             for i in range(4):
                 # An MPI integer has a 2-byte header which describes the number
                 # of bits in the integer.
-                bitlength = (private_key[0] * 256) + private_key[1]
-                bytelength = math.ceil(bitlength / 8)
+                bit_length = (private_key[0] * 256) + private_key[1]
+                byte_length = math.ceil(bit_length / 8)
                 # Add 2 bytes to accommodate the MPI header
-                bytelength += 2
-                rsa_private_key[i] = crypto.mpi_to_int(private_key[:bytelength])
-                private_key = private_key[bytelength:]
+                byte_length += 2
+                rsa_private_key[i] = crypto.mpi_to_int(private_key[:byte_length])
+                private_key = private_key[byte_length:]
 
             first_factor_p = rsa_private_key[0]
             second_factor_q = rsa_private_key[1]
@@ -367,7 +447,7 @@ class Mega:
 
     def _mkdir(self, name, parent_node_id):
         # generate random aes key (128) for folder
-        ul_key = [random.randint(0, 0xFFFFFFFF) for _ in range(6)]
+        ul_key = crypto.random_a32(length=6)
 
         # encrypt attribs
         attribs = {'n': name}
@@ -1371,7 +1451,7 @@ class Mega:
             ul_url = self._api_request({'a': 'u', 's': file_size})['p']
 
             # generate random aes key (128) for file
-            ul_key = [random.randint(0, 0xFFFFFFFF) for _ in range(6)]
+            ul_key = crypto.random_a32(length=6)
             k_str = crypto.a32_to_str(ul_key[:4])
             count = Counter.new(
                 128, initial_value=((ul_key[4] << 32) + ul_key[5]) << 64)

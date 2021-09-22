@@ -20,6 +20,12 @@ class RequestError(MegaError):
     def __str__(self):
         return self.message
 
+class RegistrationError(MegaError):
+    pass
+
+class RegistrationChallengeFailed(RegistrationError):
+    pass
+
 class EINTERNAL(RequestError):
     code = -1
     message = (

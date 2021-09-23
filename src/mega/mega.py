@@ -171,11 +171,11 @@ class Mega:
             self.login_user(email, password)
         else:
             self.login_anonymous()
-        logger.info('Login complete')
+        logger.debug('Login complete')
         return self
 
     def login_user(self, email, password):
-        logger.info('Logging in user...')
+        logger.debug('Logging in user...')
         email = email.lower()
         (account_version, user_salt) = self._api_account_version_and_salt(email)
         logger.debug('User account is version %d.', account_version)
@@ -201,7 +201,7 @@ class Mega:
         self._login_process(resp, password_key)
 
     def login_anonymous(self, password=None):
-        logger.info('Logging in anonymous temporary user...')
+        logger.debug('Logging in anonymous temporary user...')
         master_key = crypto.random_a32(length=4)
 
         # During the registration process, we start an anonymous session that
@@ -628,7 +628,7 @@ class Mega:
                 mac_str = mac_encryptor.encrypt(encryptor.encrypt(block))
 
                 file_info = os.stat(temp_output_file.name)
-                logger.info(
+                logger.debug(
                     '%s of %s downloaded', file_info.st_size, file_size
                 )
             file_mac = crypto.str_to_a32(mac_str)
@@ -935,8 +935,6 @@ class Mega:
         return file
 
     def get_files(self, public_folder_handle=None):
-        logger.info('Getting all files...')
-
         params = {}
         if public_folder_handle is not None:
             params['n'] = public_folder_handle
@@ -1492,7 +1490,7 @@ class Mega:
                         timeout=self.timeout
                     )
                     completion_file_handle = output_file.text
-                    logger.info('%s of %s uploaded', upload_progress,
+                    logger.debug('%s of %s uploaded', upload_progress,
                                 file_size)
             else:
                 output_file = self.requests_session.post(
@@ -1502,9 +1500,9 @@ class Mega:
                 )
                 completion_file_handle = output_file.text
 
-            logger.info('Chunks uploaded')
-            logger.info('Setting attributes to complete upload')
-            logger.info('Computing attributes')
+            logger.debug('Chunks uploaded')
+            logger.debug('Setting attributes to complete upload')
+            logger.debug('Computing attributes')
             file_mac = crypto.str_to_a32(mac_str)
 
             # determine meta mac
@@ -1522,7 +1520,7 @@ class Mega:
                 ul_key[5], meta_mac[0], meta_mac[1]
             ]
             encrypted_key = crypto.a32_to_base64(crypto.encrypt_key(key, self.master_key))
-            logger.info('Sending request to update attributes')
+            logger.debug('Sending request to update attributes')
             # update attributes
             request = {
                 'a': 'p',
@@ -1538,5 +1536,5 @@ class Mega:
                 ]
             }
             data = self._api_request(request)
-            logger.info('Upload complete')
+            logger.debug('Upload complete')
             return data

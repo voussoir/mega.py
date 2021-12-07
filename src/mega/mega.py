@@ -763,11 +763,12 @@ class Mega:
                         parent_dir_name,
                         files=files,
                     )
-                    if (filename and parent_node_id and file[1]['a']
+                    if (
+                            filename and parent_node_id and file[1]['a']
                             and file[1]['a']['n'] == filename
-                            and parent_node_id == file[1]['p']):
-                        if (exclude_deleted and self._trash_folder_node_id
-                                == file[1]['p']):
+                            and parent_node_id == file[1]['p']
+                        ):
+                        if (exclude_deleted and self._trash_folder_node_id == file[1]['p']):
                             continue
                         return file
                 elif (filename and file[1]['a']
@@ -795,8 +796,7 @@ class Mega:
         for foldername in paths:
             if foldername != '':
                 for file in files.items():
-                    if (file[1]['a'] and file[1]['t']
-                            and file[1]['a']['n'] == foldername):
+                    if (file[1]['a'] and file[1]['t'] and file[1]['a']['n'] == foldername):
                         if parent_desc == file[1]['p']:
                             parent_desc = file[0]
                             found = True
@@ -1490,8 +1490,7 @@ class Mega:
                         timeout=self.timeout
                     )
                     completion_file_handle = output_file.text
-                    logger.debug('%s of %s uploaded', upload_progress,
-                                file_size)
+                    logger.debug('%s of %s uploaded', upload_progress, file_size)
             else:
                 output_file = self.requests_session.post(
                     ul_url + "/0",
@@ -1515,9 +1514,14 @@ class Mega:
                 crypto.encrypt_attr(attribs, ul_key[:4])
             )
             key = [
-                ul_key[0] ^ ul_key[4], ul_key[1] ^ ul_key[5],
-                ul_key[2] ^ meta_mac[0], ul_key[3] ^ meta_mac[1], ul_key[4],
-                ul_key[5], meta_mac[0], meta_mac[1]
+                ul_key[0] ^ ul_key[4],
+                ul_key[1] ^ ul_key[5],
+                ul_key[2] ^ meta_mac[0],
+                ul_key[3] ^ meta_mac[1],
+                ul_key[4],
+                ul_key[5],
+                meta_mac[0],
+                meta_mac[1]
             ]
             encrypted_key = crypto.a32_to_base64(crypto.encrypt_key(key, self.master_key))
             logger.debug('Sending request to update attributes')

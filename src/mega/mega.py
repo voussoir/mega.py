@@ -363,15 +363,16 @@ class Mega:
             return node
         if isinstance(node, int):
             return self.get_node_by_type(node)[1]
+        raise TypeError(f'Invalid node {node}.')
 
     def normalize_node_id(self, node):
         if node is None:
             return self._root_node_id
-        elif isinstance(node, int):
+        if isinstance(node, int):
             return self.get_node_by_type(node)[1]['h']
-        elif isinstance(node, dict):
+        if isinstance(node, dict):
             return node['h']
-        elif isinstance(node, str):
+        if isinstance(node, str):
             return node
         else:
             raise TypeError(f'Invalid node {node}.')

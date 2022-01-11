@@ -972,7 +972,7 @@ class Mega:
         files_dict = {}
         self._init_shared_keys(files)
         for file in files['f']:
-            processed_file = self._process_file(file, self.shared_keys)
+            processed_file = self._process_file(file)
             if processed_file['a'] and processed_file['p'] == node_id:
                 files_dict[file['h']] = processed_file
         return files_dict

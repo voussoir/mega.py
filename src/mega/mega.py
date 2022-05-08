@@ -1105,7 +1105,7 @@ class Mega:
         request = {
             'a': 'uq',
             'strg': 1,
-            'v': 1
+            'v': 1,
         }
         return RequestDraft(request, self.final_get_storage_quota)
 
@@ -1129,7 +1129,7 @@ class Mega:
         request = {
             'a': 'uq',
             'xfer': 1,
-            'v': 1
+            'v': 1,
         }
         return RequestDraft(request, self.final_get_transfer_quota)
 
@@ -1215,7 +1215,7 @@ class Mega:
                     'ph': file_handle,
                     't': NODE_TYPE_FILE,
                     'a': encrypted_name,
-                    'k': encrypted_key
+                    'k': encrypted_key,
                 }
             ]
         }
@@ -1311,14 +1311,14 @@ class Mega:
                 public_handle,
                 decryption_key,
                 dest_node=dest_node,
-                dest_name=dest_name
+                dest_name=dest_name,
             )
         else:
             return self.draft_import_public_file(
                 public_handle,
                 decryption_key,
                 dest_node=dest_node,
-                dest_name=dest_name
+                dest_name=dest_name,
             )
 
     def final_import_public_url(self, response):
@@ -1452,8 +1452,7 @@ class Mega:
             # generate random aes key (128) for file
             ul_key = crypto.random_a32(length=6)
             k_str = crypto.a32_to_str(ul_key[:4])
-            count = Counter.new(
-                128, initial_value=((ul_key[4] << 32) + ul_key[5]) << 64)
+            count = Counter.new(128, initial_value=((ul_key[4] << 32) + ul_key[5]) << 64)
             aes = AES.new(k_str, AES.MODE_CTR, counter=count)
 
             upload_progress = 0
@@ -1488,7 +1487,7 @@ class Mega:
                     output_file = self.requests_session.post(
                         ul_url + "/" + str(chunk_start),
                         data=chunk,
-                        timeout=self.timeout
+                        timeout=self.timeout,
                     )
                     completion_file_handle = output_file.text
                     logger.debug('%s of %s uploaded', upload_progress, file_size)
@@ -1496,7 +1495,7 @@ class Mega:
                 output_file = self.requests_session.post(
                     ul_url + "/0",
                     data='',
-                    timeout=self.timeout
+                    timeout=self.timeout,
                 )
                 completion_file_handle = output_file.text
 
@@ -1522,7 +1521,7 @@ class Mega:
                 ul_key[4],
                 ul_key[5],
                 meta_mac[0],
-                meta_mac[1]
+                meta_mac[1],
             ]
             encrypted_key = crypto.a32_to_base64(crypto.encrypt_key(key, self.master_key))
             logger.debug('Sending request to update attributes')
@@ -1536,7 +1535,7 @@ class Mega:
                         'h': completion_file_handle,
                         't': NODE_TYPE_FILE,
                         'a': encrypt_attribs,
-                        'k': encrypted_key
+                        'k': encrypted_key,
                     }
                 ]
             }

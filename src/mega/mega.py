@@ -19,6 +19,8 @@ from Crypto.Util import Counter
 from . import crypto
 from . import errors
 
+from voussoirkit import progressbars
+
 logger = logging.getLogger(__name__)
 
 NODE_TYPE_FILE = 0
@@ -547,6 +549,7 @@ class Mega:
             dest_filename=None,
             is_public=False,
             file=None,
+            progressbar=None,
         ):
         if file is None:
             if is_public:
@@ -607,8 +610,12 @@ class Mega:
             mac_encryptor = AES.new(k_str, AES.MODE_CBC, mac_str.encode("utf8"))
             iv_str = crypto.a32_to_str([iv[0], iv[1], iv[0], iv[1]])
 
+            progressbar = progressbars.normalize_progressbar(progressbar, total=file_size)
+            download_progress = 0
+
             for chunk_start, chunk_size in crypto.get_chunks(file_size):
                 chunk = input_file.read(chunk_size)
+                download_progress += len(chunk)
                 chunk = aes.decrypt(chunk)
                 temp_output_file.write(chunk)
 
@@ -632,6 +639,10 @@ class Mega:
                 logger.debug(
                     '%s of %s downloaded', file_info.st_size, file_size
                 )
+                if progressbar is not None:
+                    progressbar.step(download_progress)
+            if progressbar is not None:
+                progressbar.done()
             file_mac = crypto.str_to_a32(mac_str)
             # check mac integrity
             if (file_mac[0] ^ file_mac[1],
@@ -641,7 +652,7 @@ class Mega:
             shutil.move(temp_output_file.name, output_path)
             return output_path
 
-    def download_file(self, file, dest_path=None, dest_filename=None):
+    def download_file(self, file, dest_path=None, dest_filename=None, progressbar=None):
         '''
         Download a file by its file object
         '''
@@ -652,9 +663,10 @@ class Mega:
             dest_path=dest_path,
             dest_filename=dest_filename,
             is_public=False,
+            progressbar=progressbar,
         )
 
-    def download_url(self, url, dest_path=None, dest_filename=None):
+    def download_url(self, url, dest_path=None, dest_filename=None, progressbar=None):
         '''
         Download a file by its public url
         '''
@@ -665,6 +677,7 @@ class Mega:
             dest_path=dest_path,
             dest_filename=dest_filename,
             is_public=True,
+            progressbar=progressbar,
         )
 
     # EMPTY TRASH ##################################################################################
@@ -1436,7 +1449,7 @@ class Mega:
 
     # UPLOAD #######################################################################################
 
-    def upload(self, filename, dest=None, dest_filename=None):
+    def upload(self, filename, dest=None, dest_filename=None, progressbar=None):
         # determine storage node
         if dest is None:
             # if none set, upload to cloud drive node
@@ -1462,6 +1475,7 @@ class Mega:
             mac_encryptor = AES.new(k_str, AES.MODE_CBC, mac_str.encode("utf8"))
             iv_str = crypto.a32_to_str([ul_key[4], ul_key[5], ul_key[4], ul_key[5]])
             if file_size > 0:
+                progressbar = progressbars.normalize_progressbar(progressbar, total=file_size)
                 for chunk_start, chunk_size in crypto.get_chunks(file_size):
                     chunk = input_file.read(chunk_size)
                     upload_progress += len(chunk)
@@ -1491,6 +1505,10 @@ class Mega:
                     )
                     completion_file_handle = output_file.text
                     logger.debug('%s of %s uploaded', upload_progress, file_size)
+                    if progressbar is not None:
+                        progressbar.step(upload_progress)
+                if progressbar is not None:
+                    progressbar.done()
             else:
                 output_file = self.requests_session.post(
                     ul_url + "/0",

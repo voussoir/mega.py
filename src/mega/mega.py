@@ -388,10 +388,10 @@ class Mega:
         if '/file/' in url:
             # V2 URL structure
             url = url.replace(' ', '')
-            file_id = re.findall(r'\W\w\w\w\w\w\w\w\w\W', url)[0][1:-1]
-            id_index = re.search(file_id, url).end()
+            public_handle = re.findall(r'\W\w\w\w\w\w\w\w\w\W', url)[0][1:-1]
+            id_index = re.search(public_handle, url).end()
             key = url[id_index + 1:]
-            return f'{file_id}!{key}'
+            return (public_handle, key)
         elif '!' in url:
             match = re.findall(r'/#F?!(.*)!(.*)', url)
             if not match:

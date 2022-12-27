@@ -12,7 +12,7 @@ pytest-cov==2.10.0
 zest.releaser==6.20.1
 setuptools==47.3.1
 twine==3.2.0
-wheel==0.34.2
+wheel==0.38.1
 rope==0.17.0
 pytest-mock==3.1.1
 brunette==0.1.5

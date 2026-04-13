@@ -1,5 +1,5 @@
 -r requirements.txt
-pytest==5.4.3
+pytest==9.0.3
 ipdb==0.13.3
 flake8==3.8.3
 pep8-naming==0.11.1
